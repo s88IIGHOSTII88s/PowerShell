@@ -107,7 +107,7 @@ namespace System.Diagnostics.Eventing
         }
 
         //
-        // implement Dispose Pattern to early deregister from ETW insted of waiting for
+        // implement Dispose Pattern to early deregister from ETW instead of waiting for
         // the finalizer to call deregistration.
         // Once the user is done with the provider it needs to call Close() or Dispose()
         // If neither are called the finalizer will unregister the provider anyway
@@ -131,7 +131,10 @@ namespace System.Diagnostics.Eventing
             //
             // check if the object has been already disposed
             //
-            if (_disposed == 1) return;
+            if (_disposed == 1)
+            {
+                return;
+            }
 
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
@@ -291,8 +294,7 @@ namespace System.Diagnostics.Eventing
         {
             dataDescriptor->Reserved = 0;
 
-            string sRet = data as string;
-            if (sRet != null)
+            if (data is string sRet)
             {
                 dataDescriptor->Size = (uint)((sRet.Length + 1) * 2);
                 return sRet;
@@ -331,10 +333,10 @@ namespace System.Diagnostics.Eventing
                 *uintptr = (uint)data;
                 dataDescriptor->DataPointer = (ulong)uintptr;
             }
-            else if (data is UInt64)
+            else if (data is ulong)
             {
                 dataDescriptor->Size = (uint)sizeof(ulong);
-                UInt64* ulongptr = (ulong*)dataBuffer;
+                ulong* ulongptr = (ulong*)dataBuffer;
                 *ulongptr = (ulong)data;
                 dataDescriptor->DataPointer = (ulong)ulongptr;
             }
@@ -437,10 +439,7 @@ namespace System.Diagnostics.Eventing
         {
             int status = 0;
 
-            if (eventMessage == null)
-            {
-                throw new ArgumentNullException(nameof(eventMessage));
-            }
+            ArgumentNullException.ThrowIfNull(eventMessage);
 
             if (IsEnabled(eventLevel, eventKeywords))
             {
@@ -508,10 +507,7 @@ namespace System.Diagnostics.Eventing
         {
             uint status = 0;
 
-            if (data == null)
-            {
-                throw new ArgumentNullException(nameof(data));
-            }
+            ArgumentNullException.ThrowIfNull(data);
 
             if (IsEnabled(eventDescriptor.Level, eventDescriptor.Keywords))
             {

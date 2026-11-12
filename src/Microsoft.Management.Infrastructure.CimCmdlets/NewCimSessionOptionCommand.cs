@@ -231,7 +231,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
         /// </summary>
         [Parameter(ValueFromPipelineByPropertyName = true,
                    ParameterSetName = WSManParameterSet)]
-        public UInt32 MaxEnvelopeSizeKB
+        public uint MaxEnvelopeSizeKB
         {
             get
             {
@@ -246,7 +246,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
             }
         }
 
-        private UInt32 maxenvelopesizekb;
+        private uint maxenvelopesizekb;
         private bool maxenvelopesizekbSet = false;
 
         /// <summary>
@@ -299,7 +299,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
         /// Ps Credential used by the proxy server when required by the server.
         /// </summary>
         [Parameter(ParameterSetName = WSManParameterSet)]
-        [Credential()]
+        [Credential]
         public PSCredential ProxyCredential
         {
             get

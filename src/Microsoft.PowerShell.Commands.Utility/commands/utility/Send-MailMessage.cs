@@ -61,8 +61,8 @@ namespace Microsoft.PowerShell.Commands
         [Parameter(ValueFromPipelineByPropertyName = true)]
         [Alias("BE")]
         [ValidateNotNullOrEmpty]
-        [ArgumentEncodingCompletionsAttribute]
-        [ArgumentToEncodingTransformationAttribute]
+        [ArgumentEncodingCompletions]
+        [ArgumentToEncodingTransformation]
         public Encoding Encoding
         {
             get
@@ -165,7 +165,7 @@ namespace Microsoft.PowerShell.Commands
         /// Value must be greater than zero.
         /// </remarks>
         [Parameter(ValueFromPipelineByPropertyName = true)]
-        [ValidateRange(0, Int32.MaxValue)]
+        [ValidateRange(0, int.MaxValue)]
         public int Port { get; set; }
 
         #endregion

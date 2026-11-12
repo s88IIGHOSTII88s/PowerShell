@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Management.Automation;
@@ -80,12 +79,12 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
         /// <param name="commands">Commands to show.</param>
         public AllModulesViewModel(Dictionary<string, ShowCommandModuleInfo> importedModules, IEnumerable<ShowCommandCommandInfo> commands)
         {
-            #pragma warning disable IDE0075 // IDE0075: Conditional expression can be simplified
-            if (commands == null || !commands.GetEnumerator().MoveNext())
+            ArgumentNullException.ThrowIfNull(commands);
+
+            if (!commands.GetEnumerator().MoveNext())
             {
                 throw new ArgumentNullException("commands");
             }
-            #pragma warning disable IDE0075 // IDE0075: Conditional expression can be simplified
 
             this.Initialization(importedModules, commands, true);
         }
@@ -98,10 +97,7 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
         /// <param name="noCommonParameter">True not to show common parameters.</param>
         public AllModulesViewModel(Dictionary<string, ShowCommandModuleInfo> importedModules, IEnumerable<ShowCommandCommandInfo> commands, bool noCommonParameter)
         {
-            if (commands == null)
-            {
-                throw new ArgumentNullException("commands");
-            }
+            ArgumentNullException.ThrowIfNull(commands);
 
             this.Initialization(importedModules, commands, noCommonParameter);
         }
@@ -403,13 +399,11 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
         /// </summary>
         internal void OnRefresh()
         {
-            #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.
             EventHandler<EventArgs> handler = this.Refresh;
             if (handler != null)
             {
                 handler(this, new EventArgs());
             }
-            #pragma warning restore IDE1005s
         }
 
         #region Private Methods
@@ -535,7 +529,7 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
                 return;
             }
 
-            // If there are more modules, create an additional module to agregate all commands
+            // If there are more modules, create an additional module to aggregate all commands
             ModuleViewModel allCommandsModule = new ModuleViewModel(ShowCommandResources.All, null);
             this.modules.Add(allCommandsModule);
             allCommandsModule.SetAllModules(this);
@@ -598,8 +592,6 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
             this.OnSelectedCommandInSelectedModuleNeedsImportModule(e);
         }
 
-        #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.
-
         /// <summary>
         /// Triggers SelectedCommandInSelectedModuleNeedsHelp.
         /// </summary>
@@ -661,8 +653,6 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
                 handler(this, new PropertyChangedEventArgs(propertyName));
             }
         }
-
-        #pragma warning restore IDE1005s
         #endregion
     }
 }

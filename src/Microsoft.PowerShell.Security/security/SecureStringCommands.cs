@@ -239,7 +239,7 @@ namespace Microsoft.PowerShell.Commands
         /// Gets or sets the unsecured string to be imported.
         /// </summary>
         [Parameter(Position = 0, ValueFromPipeline = true, Mandatory = true)]
-        public String String
+        public string String
         {
             get
             {
@@ -311,8 +311,7 @@ namespace Microsoft.PowerShell.Commands
                 byte[] iv = null;
 
                 // If this is a V2 package
-                if (String.IndexOf(SecureStringHelper.SecureStringExportHeader,
-                        StringComparison.OrdinalIgnoreCase) == 0)
+                if (String.StartsWith(SecureStringHelper.SecureStringExportHeader, StringComparison.OrdinalIgnoreCase))
                 {
                     try
                     {
@@ -326,7 +325,7 @@ namespace Microsoft.PowerShell.Commands
                         // representation, then parse it into its components.
                         byte[] inputBytes = Convert.FromBase64String(remainingData);
                         string dataPackage = System.Text.Encoding.Unicode.GetString(inputBytes);
-                        string[] dataElements = dataPackage.Split(Utils.Separators.Pipe);
+                        string[] dataElements = dataPackage.Split('|');
 
                         if (dataElements.Length == 3)
                         {

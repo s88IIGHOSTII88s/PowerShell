@@ -5,12 +5,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Microsoft.Management.UI.Internal
 {
     /// <summary>
-    /// The FilterEvaluator class is responsible for allowing the registeration of
+    /// The FilterEvaluator class is responsible for allowing the registration of
     /// the FilterExpressionProviders and producing a FilterExpression composed of
     /// the FilterExpression returned from the providers.
     /// </summary>
@@ -146,10 +145,7 @@ namespace Microsoft.Management.UI.Internal
         /// </param>
         public void AddFilterExpressionProvider(IFilterExpressionProvider provider)
         {
-            if (provider == null)
-            {
-                throw new ArgumentNullException("provider");
-            }
+            ArgumentNullException.ThrowIfNull(provider);
 
             this.filterExpressionProviders.Add(provider);
             provider.FilterExpressionChanged += this.FilterProvider_FilterExpressionChanged;
@@ -163,18 +159,13 @@ namespace Microsoft.Management.UI.Internal
         /// </param>
         public void RemoveFilterExpressionProvider(IFilterExpressionProvider provider)
         {
-            if (provider == null)
-            {
-                throw new ArgumentNullException("provider");
-            }
+            ArgumentNullException.ThrowIfNull(provider);
 
             this.filterExpressionProviders.Remove(provider);
             provider.FilterExpressionChanged -= this.FilterProvider_FilterExpressionChanged;
         }
 
         #region NotifyPropertyChanged
-
-        #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.
 
         /// <summary>
         /// Notifies listeners that a property has changed.
@@ -216,8 +207,6 @@ namespace Microsoft.Management.UI.Internal
                 eh(this, new EventArgs());
             }
         }
-
-        #pragma warning restore IDE1005
 
         private void FilterProvider_FilterExpressionChanged(object sender, EventArgs e)
         {

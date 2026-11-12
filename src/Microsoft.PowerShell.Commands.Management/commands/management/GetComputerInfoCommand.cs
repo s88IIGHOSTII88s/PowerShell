@@ -17,8 +17,6 @@ using Microsoft.Win32;
 
 namespace Microsoft.PowerShell.Commands
 {
-    using Extensions;
-
     #region GetComputerInfoCommand cmdlet implementation
     /// <summary>
     /// The Get-ComputerInfo cmdlet gathers and reports information
@@ -248,7 +246,7 @@ namespace Microsoft.PowerShell.Commands
             try
             {
                 var halPath = CIMHelper.EscapePath(System.IO.Path.Combine(systemDirectory, "hal.dll"));
-                var query = string.Format("SELECT * FROM CIM_DataFile Where Name='{0}'", halPath);
+                var query = string.Create(CultureInfo.InvariantCulture, $"SELECT * FROM CIM_DataFile Where Name='{halPath}'");
                 var instance = session.QueryFirstInstance(query);
 
                 if (instance != null)
@@ -1125,16 +1123,13 @@ namespace Microsoft.PowerShell.Commands
                     // base-indication prefix. For example, the string "0409" will be
                     // parsed into the base-10 integer value 1033, while the string "0x0409"
                     // will fail to parse due to the "0x" base-indication prefix.
-                    if (UInt32.TryParse(locale, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint localeNum))
+                    if (uint.TryParse(locale, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint localeNum))
                     {
                         culture = CultureInfo.GetCultureInfo((int)localeNum);
                     }
 
-                    if (culture == null)
-                    {
-                        // If TryParse failed we'll try using the original string as culture name
-                        culture = CultureInfo.GetCultureInfo(locale);
-                    }
+                    // If TryParse failed we'll try using the original string as culture name
+                    culture ??= CultureInfo.GetCultureInfo(locale);
                 }
                 catch (Exception)
                 {
@@ -1193,7 +1188,7 @@ namespace Microsoft.PowerShell.Commands
         /// </param>
         /// <returns>
         /// A Nullable<typeparamref name="T"/> enum object. If the value
-        /// is convertable to a valid enum value, the returned object's
+        /// is convertible to a valid enum value, the returned object's
         /// value will contain the converted value, otherwise the returned
         /// object will be null.
         /// </returns>
@@ -1231,11 +1226,11 @@ namespace Microsoft.PowerShell.Commands
 
     internal static class RegistryInfo
     {
-        public static Dictionary<string, UInt32> GetServerLevels()
+        public static Dictionary<string, uint> GetServerLevels()
         {
             const string keyPath = @"Software\Microsoft\Windows NT\CurrentVersion\Server\ServerLevels";
 
-            var rv = new Dictionary<string, UInt32>();
+            var rv = new Dictionary<string, uint>();
 
             using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
             {
@@ -1338,7 +1333,7 @@ namespace Microsoft.PowerShell.Commands
 
 #pragma warning disable 649 // fields and properties in these class are assigned dynamically
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiBaseBoard
+    internal sealed class WmiBaseBoard
     {
         public string Caption;
         public string[] ConfigOptions;
@@ -1371,9 +1366,9 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiBios : WmiClassBase
+    internal sealed class WmiBios : WmiClassBase
     {
-        public UInt16[] BiosCharacteristics;
+        public ushort[] BiosCharacteristics;
         public string[] BIOSVersion;
         public string BuildNumber;
         public string Caption;
@@ -1406,7 +1401,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiComputerSystem
+    internal sealed class WmiComputerSystem
     {
         public ushort? AdminPasswordStatus;
         public bool? AutomaticManagedPagefile;
@@ -1416,11 +1411,11 @@ namespace Microsoft.PowerShell.Commands
         public ushort? BootOptionOnWatchDog;
         public bool? BootROMSupported;
         public string BootupState;
-        public UInt16[] BootStatus;
+        public ushort[] BootStatus;
         public string Caption;
         public ushort? ChassisBootupState;
         public string ChassisSKUNumber;
-        public Int16? CurrentTimeZone;
+        public short? CurrentTimeZone;
         public bool? DaylightInEffect;
         public string Description;
         public string DNSHostName;
@@ -1442,10 +1437,10 @@ namespace Microsoft.PowerShell.Commands
         public uint? NumberOfProcessors;
         public string[] OEMStringArray;
         public bool? PartOfDomain;
-        public Int64? PauseAfterReset;
+        public long? PauseAfterReset;
         public ushort? PCSystemType;
         public ushort? PCSystemTypeEx;
-        public UInt16[] PowerManagementCapabilities;
+        public ushort[] PowerManagementCapabilities;
         public bool? PowerManagementSupported;
         public ushort? PowerOnPasswordStatus;
         public ushort? PowerState;
@@ -1453,8 +1448,8 @@ namespace Microsoft.PowerShell.Commands
         public string PrimaryOwnerContact;
         public string PrimaryOwnerName;
         public ushort? ResetCapability;
-        public Int16? ResetCount;
-        public Int16? ResetLimit;
+        public short? ResetCount;
+        public short? ResetLimit;
         public string[] Roles;
         public string Status;
         public string[] SupportContactDescription;
@@ -1489,14 +1484,14 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiDeviceGuard
+    internal sealed class WmiDeviceGuard
     {
-        public UInt32[] AvailableSecurityProperties;
+        public uint[] AvailableSecurityProperties;
         public uint? CodeIntegrityPolicyEnforcementStatus;
         public uint? UsermodeCodeIntegrityPolicyEnforcementStatus;
-        public UInt32[] RequiredSecurityProperties;
-        public UInt32[] SecurityServicesConfigured;
-        public UInt32[] SecurityServicesRunning;
+        public uint[] RequiredSecurityProperties;
+        public uint[] SecurityServicesConfigured;
+        public uint[] SecurityServicesRunning;
         public uint? VirtualizationBasedSecurityStatus;
 
         public DeviceGuard AsOutputType
@@ -1564,7 +1559,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiKeyboard
+    internal sealed class WmiKeyboard
     {
         public ushort? Availability;
         public string Caption;
@@ -1582,7 +1577,7 @@ namespace Microsoft.PowerShell.Commands
         public ushort? NumberOfFunctionKeys;
         public ushort? Password;
         public string PNPDeviceID;
-        public UInt16[] PowerManagementCapabilities;
+        public ushort[] PowerManagementCapabilities;
         public bool? PowerManagementSupported;
         public string Status;
         public ushort? StatusInfo;
@@ -1591,14 +1586,14 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WMiLogicalMemory
+    internal sealed class WMiLogicalMemory
     {
         // TODO: fill this in!!!
         public uint? TotalPhysicalMemory;
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiMsftNetAdapter
+    internal sealed class WmiMsftNetAdapter
     {
         public string Caption;
         public string Description;
@@ -1613,7 +1608,7 @@ namespace Microsoft.PowerShell.Commands
         public string ErrorDescription;
         public uint? LastErrorCode;
         public string PNPDeviceID;
-        public UInt16[] PowerManagementCapabilities;
+        public ushort[] PowerManagementCapabilities;
         public bool? PowerManagementSupported;
         public ushort? StatusInfo;
         public string SystemCreationClassName;
@@ -1680,13 +1675,13 @@ namespace Microsoft.PowerShell.Commands
         public string PnPDeviceID;
         public string DriverProvider;
         public string ComponentID;
-        public UInt32[] LowerLayerInterfaceIndices;
-        public UInt32[] HigherLayerInterfaceIndices;
+        public uint[] LowerLayerInterfaceIndices;
+        public uint[] HigherLayerInterfaceIndices;
         public bool? AdminLocked;
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiNetworkAdapter
+    internal sealed class WmiNetworkAdapter
     {
         public string AdapterType;
         public ushort? AdapterTypeID;
@@ -1717,7 +1712,7 @@ namespace Microsoft.PowerShell.Commands
         public string PermanentAddress;
         public bool? PhysicalAdapter;
         public string PNPDeviceID;
-        public UInt16[] PowerManagementCapabilities;
+        public ushort[] PowerManagementCapabilities;
         public bool? PowerManagementSupported;
         public string ProductName;
         public string ServiceName;
@@ -1730,7 +1725,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiNetworkAdapterConfiguration
+    internal sealed class WmiNetworkAdapterConfiguration
     {
         public bool? ArpAlwaysSourceRoute;
         public bool? ArpUseEtherSNAP;
@@ -1753,7 +1748,7 @@ namespace Microsoft.PowerShell.Commands
         public bool? DomainDNSRegistrationEnabled;
         public uint? ForwardBufferMemory;
         public bool? FullDNSRegistrationEnabled;
-        public UInt16[] GatewayCostMetric;
+        public ushort[] GatewayCostMetric;
         public byte? IGMPLevel;
         public uint? Index;
         public uint? InterfaceIndex;
@@ -1769,7 +1764,7 @@ namespace Microsoft.PowerShell.Commands
         public bool? IPUseZeroBroadcast;
         public string IPXAddress;
         public bool? IPXEnabled;
-        public UInt32[] IPXFrameType;
+        public uint[] IPXFrameType;
         public uint? IPXMediaType;
         public string[] IPXNetworkNumber;
         public string IPXVirtualNetNumber;
@@ -1796,7 +1791,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiOperatingSystem : WmiClassBase
+    internal sealed class WmiOperatingSystem : WmiClassBase
     {
         #region Fields
         public string BootDevice;
@@ -1807,7 +1802,7 @@ namespace Microsoft.PowerShell.Commands
         public string CountryCode;
         public string CSDVersion;
         public string CSName;
-        public Int16? CurrentTimeZone;
+        public short? CurrentTimeZone;
         public bool? DataExecutionPrevention_Available;
         public bool? DataExecutionPrevention_32BitApplications;
         public bool? DataExecutionPrevention_Drivers;
@@ -1893,8 +1888,8 @@ namespace Microsoft.PowerShell.Commands
             var mask = suiteMask.Value;
             var list = new List<OSProductSuite>();
 
-            foreach (OSProductSuite suite in Enum.GetValues(typeof(OSProductSuite)))
-                if ((mask & (UInt32)suite) != 0)
+            foreach (OSProductSuite suite in Enum.GetValues<OSProductSuite>())
+                if ((mask & (uint)suite) != 0)
                     list.Add(suite);
 
             return list.ToArray();
@@ -1903,7 +1898,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiPageFileUsage
+    internal sealed class WmiPageFileUsage
     {
         public uint? AllocatedBaseSize;
         public string Caption;
@@ -1917,7 +1912,7 @@ namespace Microsoft.PowerShell.Commands
     }
 
     [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses", Justification = "Class is instantiated directly from a CIM instance")]
-    internal class WmiProcessor
+    internal sealed class WmiProcessor
     {
         public ushort? AddressWidth;
         public ushort? Architecture;
@@ -1954,7 +1949,7 @@ namespace Microsoft.PowerShell.Commands
         public string OtherFamilyDescription;
         public string PartNumber;
         public string PNPDeviceID;
-        public UInt16[] PowerManagementCapabilities;
+        public ushort[] PowerManagementCapabilities;
         public bool? PowerManagementSupported;
         public string ProcessorId;
         public ushort? ProcessorType;
@@ -1980,7 +1975,7 @@ namespace Microsoft.PowerShell.Commands
     #endregion Intermediate WMI classes
 
     #region Other Intermediate classes
-    internal class RegWinNtCurrentVersion
+    internal sealed class RegWinNtCurrentVersion
     {
         public string BuildLabEx;
         public string CurrentVersion;
@@ -2282,7 +2277,7 @@ namespace Microsoft.PowerShell.Commands
         /// the System Management BIOS Reference Specification.
         /// </summary>
         [SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
-        public UInt16[] BiosCharacteristics { get; internal set; }
+        public ushort[] BiosCharacteristics { get; internal set; }
 
         /// <summary>
         /// Array of the complete system BIOS information. In many computers
@@ -2320,12 +2315,12 @@ namespace Microsoft.PowerShell.Commands
         /// <summary>
         /// Major version of the embedded controller firmware.
         /// </summary>
-        public Int16? BiosEmbeddedControllerMajorVersion { get; internal set; }
+        public short? BiosEmbeddedControllerMajorVersion { get; internal set; }
 
         /// <summary>
         /// Minor version of the embedded controller firmware.
         /// </summary>
-        public Int16? BiosEmbeddedControllerMinorVersion { get; internal set; }
+        public short? BiosEmbeddedControllerMinorVersion { get; internal set; }
 
         /// <summary>
         /// Firmware type of the local computer.
@@ -2496,7 +2491,7 @@ namespace Microsoft.PowerShell.Commands
         /// Status and Additional Data fields that identify the boot status.
         /// </summary>
         [SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
-        public UInt16[] CsBootStatus { get; internal set; }
+        public ushort[] CsBootStatus { get; internal set; }
 
         /// <summary>
         /// System is started. Fail-safe boot bypasses the user startup files—also called SafeBoot.
@@ -2524,7 +2519,7 @@ namespace Microsoft.PowerShell.Commands
         /// Amount of time the unitary computer system is offset from Coordinated
         /// Universal Time (UTC).
         /// </summary>
-        public Int16? CsCurrentTimeZone { get; internal set; }
+        public short? CsCurrentTimeZone { get; internal set; }
 
         /// <summary>
         /// If True, the daylight savings mode is ON.
@@ -2675,7 +2670,7 @@ namespace Microsoft.PowerShell.Commands
         /// and automatic system reset. A value of –1 (minus one) indicates that
         /// the pause value is unknown.
         /// </summary>
-        public Int64? CsPauseAfterReset { get; internal set; }
+        public long? CsPauseAfterReset { get; internal set; }
 
         /// <summary>
         /// Type of the computer in use, such as laptop, desktop, or tablet.
@@ -2743,13 +2738,13 @@ namespace Microsoft.PowerShell.Commands
         /// Number of automatic resets since the last reset.
         /// A value of –1 (minus one) indicates that the count is unknown.
         /// </summary>
-        public Int16? CsResetCount { get; internal set; }
+        public short? CsResetCount { get; internal set; }
 
         /// <summary>
         /// Number of consecutive times a system reset is attempted.
         /// A value of –1 (minus one) indicates that the limit is unknown.
         /// </summary>
-        public Int16? CsResetLimit { get; internal set; }
+        public short? CsResetLimit { get; internal set; }
 
         /// <summary>
         /// Array that specifies the roles of a system in the information
@@ -2909,7 +2904,7 @@ namespace Microsoft.PowerShell.Commands
         /// Number, in minutes, an operating system is offset from Greenwich
         /// mean time (GMT). The number is positive, negative, or zero.
         /// </summary>
-        public Int16? OsCurrentTimeZone { get; internal set; }
+        public short? OsCurrentTimeZone { get; internal set; }
 
         /// <summary>
         /// Language identifier used by the operating system.
@@ -3058,7 +3053,7 @@ namespace Microsoft.PowerShell.Commands
         public ulong? OsFreeSpaceInPagingFiles { get; internal set; }
 
         /// <summary>
-        /// Array of fiel paths to the operating system's paging files.
+        /// Array of file paths to the operating system's paging files.
         /// </summary>
         [SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
         public string[] OsPagingFiles { get; internal set; }
@@ -3328,9 +3323,9 @@ namespace Microsoft.PowerShell.Commands
     [SuppressMessage("Microsoft.Design", "CA1008:EnumsShouldHaveZeroValue", Justification = "The underlying MOF definition does not contain a zero value. The converter method will handle it appropriately.")]
     public enum BootOptionAction
     {
-        //  <summary>
-        //  This value is reserved
-        //  </summary>
+        // <summary>
+        // This value is reserved
+        // </summary>
         // Reserved = 0,
 
         /// <summary>
@@ -3687,7 +3682,22 @@ namespace Microsoft.PowerShell.Commands
         /// <summary>
         /// Secure Memory Overwrite.
         /// </summary>
-        SecureMemoryOverwrite = 4
+        SecureMemoryOverwrite = 4,
+
+        /// <summary>
+        /// UEFI Code Readonly.
+        /// </summary>
+        UEFICodeReadonly = 5,
+
+        /// <summary>
+        /// SMM Security Mitigations 1.0.
+        /// </summary>
+        SMMSecurityMitigations = 6,
+
+        /// <summary>
+        /// Mode Based Execution Control.
+        /// </summary>
+        ModeBasedExecutionControl = 7
     }
 
     /// <summary>
@@ -5086,7 +5096,7 @@ namespace Microsoft.PowerShell.Commands
     #endregion Output components
 
     #region Native
-    internal static class Native
+    internal static partial class Native
     {
         private static class PInvokeDllNames
         {
@@ -5099,24 +5109,24 @@ namespace Microsoft.PowerShell.Commands
         public const uint POWER_PLATFORM_ROLE_V1 = 0x1;
         public const uint POWER_PLATFORM_ROLE_V2 = 0x2;
 
-        public const UInt32 S_OK = 0;
+        public const uint S_OK = 0;
 
         /// <summary>
         /// Import WINAPI function PowerDeterminePlatformRoleEx.
         /// </summary>
         /// <param name="version">The version of the POWER_PLATFORM_ROLE enumeration for the platform.</param>
         /// <returns>POWER_PLATFORM_ROLE enumeration.</returns>
-        [DllImport(PInvokeDllNames.PowerDeterminePlatformRoleExDllName, EntryPoint = "PowerDeterminePlatformRoleEx", CharSet = CharSet.Ansi)]
-        public static extern uint PowerDeterminePlatformRoleEx(uint version);
+        [LibraryImport(PInvokeDllNames.PowerDeterminePlatformRoleExDllName, EntryPoint = "PowerDeterminePlatformRoleEx")]
+        public static partial uint PowerDeterminePlatformRoleEx(uint version);
 
         /// <summary>
         /// Retrieve the amount of RAM physically installed in the computer.
         /// </summary>
         /// <param name="MemoryInKilobytes"></param>
         /// <returns></returns>
-        [DllImport(PInvokeDllNames.GetPhysicallyInstalledSystemMemoryDllName, SetLastError = true)]
+        [LibraryImport(PInvokeDllNames.GetPhysicallyInstalledSystemMemoryDllName)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GetPhysicallyInstalledSystemMemory(out ulong MemoryInKilobytes);
+        public static partial bool GetPhysicallyInstalledSystemMemory(out ulong MemoryInKilobytes);
 
         /// <summary>
         /// Retrieve the firmware type of the local computer.
@@ -5126,9 +5136,9 @@ namespace Microsoft.PowerShell.Commands
         /// the resultant firmware type
         /// </param>
         /// <returns></returns>
-        [DllImport(PInvokeDllNames.GetFirmwareTypeDllName, SetLastError = true)]
+        [LibraryImport(PInvokeDllNames.GetFirmwareTypeDllName)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GetFirmwareType(out FirmwareType firmwareType);
+        public static partial bool GetFirmwareType(out FirmwareType firmwareType);
 
         /// <summary>
         /// Gets the data specified for the passed in property name from the
@@ -5137,8 +5147,8 @@ namespace Microsoft.PowerShell.Commands
         /// <param name="licenseProperty">Name of the licensing property to get.</param>
         /// <param name="propertyValue">Out parameter for the value.</param>
         /// <returns>An hresult indicating success or failure.</returns>
-        [DllImport("slc.dll", CharSet = CharSet.Unicode)]
-        internal static extern int SLGetWindowsInformationDWORD(string licenseProperty, out int propertyValue);
+        [LibraryImport("slc.dll", StringMarshalling = StringMarshalling.Utf16)]
+        internal static partial int SLGetWindowsInformationDWORD(string licenseProperty, out int propertyValue);
     }
     #endregion Native
 }

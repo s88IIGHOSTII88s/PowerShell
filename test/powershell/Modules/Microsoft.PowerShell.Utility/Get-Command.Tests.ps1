@@ -7,6 +7,7 @@ Describe "Get-Command Feature tests" -Tag Feature {
             $cmds = Get-Command get-hlp -UseFuzzyMatch
             $cmds.Count | Should -BeGreaterThan 0
             $cmds[0].Name | Should -BeExactly 'Get-Help' -Because "This should be closest match so shows up first"
+            $cmds[0].Score | Should -Be 1
         }
 
         It "Should match native commands" {
@@ -19,6 +20,41 @@ Describe "Get-Command Feature tests" -Tag Feature {
             $cmds = Get-Command $input -UseFuzzyMatch
             $cmds.Count | Should -BeGreaterThan 0
             $cmds.Name | Should -Contain $expectedcmd
+        }
+
+        It "Should use minimum distance" {
+            $cmds = Get-Command get-hlp -UseFuzzyMatch -FuzzyMinimumDistance 3
+            $cmds.Count | Should -BeGreaterThan 0
+            foreach ($cmd in $cmds) {
+                $cmd.Score | Should -BeLessOrEqual 3
+            }
+        }
+
+        It "Should not return duplicate commands from multiple copies of a module when using -UseFuzzyMatching" {
+            # Create two discoverable copies of the same module so the duplicate-candidate scenario
+            # is reproduced consistently without relying on platform-specific installed modules.
+            $moduleRoots = 1..2 | ForEach-Object {
+                $moduleRoot = Join-Path $TestDrive "ModuleRoot$_"
+                $modulePath = Join-Path $moduleRoot "DuplicateFuzzyModule"
+                $null = New-Item -ItemType Directory -Path $modulePath
+                New-ModuleManifest -Path (Join-Path $modulePath "DuplicateFuzzyModule.psd1") `
+                    -ModuleVersion "1.0" `
+                    -CmdletsToExport "Get-FuzzyDuplicate"
+                $moduleRoot
+            }
+
+            $originalModulePath = $env:PSModulePath
+            try {
+                $env:PSModulePath = $moduleRoots -join [System.IO.Path]::PathSeparator
+                $cmds = Get-Command Get-FuzzyDuplicat -UseFuzzyMatching -FuzzyMinimumDistance 1
+            }
+            finally {
+                $env:PSModulePath = $originalModulePath
+            }
+
+            $cmds | Should -HaveCount 1
+            $cmds.Name | Should -BeExactly "Get-FuzzyDuplicate"
+            $cmds.Score | Should -Be 1
         }
     }
 

@@ -20,20 +20,20 @@ namespace Microsoft.PowerShell
         [StructLayout(LayoutKind.Sequential)]
         internal readonly struct StartUpInfo
         {
-            public readonly UInt32 cb;
+            public readonly uint cb;
             private readonly IntPtr lpReserved;
             public readonly IntPtr lpDesktop;
             public readonly IntPtr lpTitle;
-            public readonly UInt32 dwX;
-            public readonly UInt32 dwY;
-            public readonly UInt32 dwXSize;
-            public readonly UInt32 dwYSize;
-            public readonly UInt32 dwXCountChars;
-            public readonly UInt32 dwYCountChars;
-            public readonly UInt32 dwFillAttribute;
-            public readonly UInt32 dwFlags;
-            public readonly UInt16 wShowWindow;
-            private readonly UInt16 cbReserved2;
+            public readonly uint dwX;
+            public readonly uint dwY;
+            public readonly uint dwXSize;
+            public readonly uint dwYSize;
+            public readonly uint dwXCountChars;
+            public readonly uint dwYCountChars;
+            public readonly uint dwFillAttribute;
+            public readonly uint dwFlags;
+            public readonly ushort wShowWindow;
+            private readonly ushort cbReserved2;
             private readonly IntPtr lpReserved2;
             public readonly IntPtr hStdInput;
             public readonly IntPtr hStdOutput;
@@ -160,7 +160,7 @@ namespace Microsoft.PowerShell
             HResult Commit();
         }
 
-        [ComImport()]
+        [ComImport]
         [Guid("6332DEBF-87B5-4670-90C0-5E57B408A49E")]
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         internal interface ICustomDestinationList
@@ -204,7 +204,7 @@ namespace Microsoft.PowerShell
             Recent
         }
 
-        [ComImport()]
+        [ComImport]
         [Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         internal interface IObjectArray
@@ -217,7 +217,7 @@ namespace Microsoft.PowerShell
                 [Out(), MarshalAs(UnmanagedType.Interface)] out object ppvObject);
         }
 
-        [ComImport()]
+        [ComImport]
         [Guid("5632B1A4-E38A-400A-928A-D4CD63230295")]
         [InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)]
         internal interface IObjectCollection
@@ -248,13 +248,13 @@ namespace Microsoft.PowerShell
         internal interface IShellLinkDataListW
         {
             [PreserveSig]
-            Int32 AddDataBlock(IntPtr pDataBlock);
+            int AddDataBlock(IntPtr pDataBlock);
 
             [PreserveSig]
-            Int32 CopyDataBlock(UInt32 dwSig, out IntPtr ppDataBlock);
+            int CopyDataBlock(uint dwSig, out IntPtr ppDataBlock);
 
             [PreserveSig]
-            Int32 RemoveDataBlock(UInt32 dwSig);
+            int RemoveDataBlock(uint dwSig);
 
             void GetFlags(out uint pdwFlags);
 

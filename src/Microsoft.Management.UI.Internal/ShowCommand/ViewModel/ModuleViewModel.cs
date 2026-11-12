@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Management.Automation;
 using System.Windows;
 
@@ -68,16 +67,11 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
         /// <param name="importedModules">All loaded modules.</param>
         public ModuleViewModel(string name, Dictionary<string, ShowCommandModuleInfo> importedModules)
         {
-            if (name == null)
-            {
-                throw new ArgumentNullException("name");
-            }
+            ArgumentNullException.ThrowIfNull(name);
 
             this.name = name;
             this.commands = new List<CommandViewModel>();
             this.filteredCommands = new ObservableCollection<CommandViewModel>();
-
-            #pragma warning disable IDE0075 // IDE0075: Conditional expression can be simplified
 
             // This check looks to see if the given module name shows up in
             // the set of modules that are known to be imported in the current
@@ -89,8 +83,6 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
                 importedModules == null ? true : name.Length == 0 ||
                 importedModules.ContainsKey(name) ||
                 string.Equals("Microsoft.PowerShell.Core", name, StringComparison.OrdinalIgnoreCase);
-
-            #pragma warning restore IDE0075
         }
         #endregion
 
@@ -377,10 +369,8 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
             }
         }
 
-        #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.
-
         /// <summary>
-        /// Callled in response to a GUI event that requires the command to be run.
+        /// Called in response to a GUI event that requires the command to be run.
         /// </summary>
         internal void OnRunSelectedCommand()
         {
@@ -534,7 +524,5 @@ namespace Microsoft.PowerShell.Commands.ShowCommandInternal
                 handler(this, new PropertyChangedEventArgs(propertyName));
             }
         }
-
-        #pragma warning restore IDE1005
     }
 }

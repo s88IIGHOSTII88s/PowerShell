@@ -78,14 +78,9 @@ namespace Microsoft.PowerShell.Commands
         public static string FileReadError { get { return UtilityCommonStrings.FileReadError; } }
 
         /// <summary>
-        /// The resource string used to indicate 'PATH:' in the formating header.
+        /// The resource string used to indicate 'PATH:' in the formatting header.
         /// </summary>
         public static string FormatHexPathPrefix { get { return UtilityCommonStrings.FormatHexPathPrefix; } }
-
-        /// <summary>
-        /// Error message to indicate that requested algorithm is not supported on the target platform.
-        /// </summary>
-        public static string AlgorithmTypeNotSupported { get { return UtilityCommonStrings.AlgorithmTypeNotSupported; } }
 
         /// <summary>
         /// The file '{0}' could not be parsed as a PowerShell Data File.
@@ -188,11 +183,11 @@ namespace Microsoft.PowerShell.Commands
         /// Gets the Offset address to be used while displaying the bytes in the collection.
         /// </summary>
         [Obsolete("The property is deprecated, please use Offset64 instead.", true)]
-        public UInt32 Offset
+        public uint Offset
         {
             get
             {
-                return (UInt32)Offset64;
+                return (uint)Offset64;
             }
 
             private set
@@ -204,7 +199,7 @@ namespace Microsoft.PowerShell.Commands
         /// <summary>
         /// Gets the Offset address to be used while displaying the bytes in the collection.
         /// </summary>
-        public UInt64 Offset64 { get; private set; }
+        public ulong Offset64 { get; private set; }
 
         /// <summary>
         /// Gets underlying bytes stored in the collection.
@@ -220,7 +215,7 @@ namespace Microsoft.PowerShell.Commands
         /// <summary>
         /// Gets the hexadecimal representation of the <see cref="Offset64"/> value.
         /// </summary>
-        public string HexOffset { get => string.Format(CultureInfo.CurrentCulture, "{0:X16}", Offset64); }
+        public string HexOffset => string.Create(CultureInfo.CurrentCulture, $"{Offset64:X16}");
 
         /// <summary>
         /// Gets the type of the input objects used to create the <see cref="ByteCollection"/>.

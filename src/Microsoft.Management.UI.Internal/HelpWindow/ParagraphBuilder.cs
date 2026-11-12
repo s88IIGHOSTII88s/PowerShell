@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -13,8 +12,8 @@ namespace Microsoft.Management.UI.Internal
 {
     /// <summary>
     /// Builds a paragraph based on Text + Bold + Highlight information.
-    /// Bold are the segments of thexct that should be bold, and Highlight are
-    /// the segments of thext that should be highlighted (like search results).
+    /// Bold are the segments of the text that should be bold, and Highlight are
+    /// the segments of the text that should be highlighted (like search results).
     /// </summary>
     internal class ParagraphBuilder : INotifyPropertyChanged
     {
@@ -44,10 +43,7 @@ namespace Microsoft.Management.UI.Internal
         /// <param name="paragraph">Paragraph we will be adding lines to in BuildParagraph.</param>
         internal ParagraphBuilder(Paragraph paragraph)
         {
-            if (paragraph == null)
-            {
-                throw new ArgumentNullException("paragraph");
-            }
+            ArgumentNullException.ThrowIfNull(paragraph);
 
             this.paragraph = paragraph;
             this.boldSpans = new List<TextSpan>();
@@ -81,12 +77,12 @@ namespace Microsoft.Management.UI.Internal
         /// <summary>
         /// Called after all the AddText calls have been made to build the paragraph
         /// based on the current text.
-        /// This method goes over 3 collections simultaneouslly:
+        /// This method goes over 3 collections simultaneously:
         ///    1) characters in this.textBuilder
         ///    2) spans in this.boldSpans
         ///    3) spans in this.highlightedSpans
         /// And adds the minimal number of Inlines to the paragraph so that all
-        /// characters that should be bold and/or highlighed are.
+        /// characters that should be bold and/or highlighted are.
         /// </summary>
         internal void BuildParagraph()
         {
@@ -108,15 +104,10 @@ namespace Microsoft.Management.UI.Internal
                 bool newHighlighted = false;
 
                 ParagraphBuilder.MoveSpanToPosition(ref currentBoldIndex, ref currentBoldSpan, i, this.boldSpans);
-
-                #pragma warning disable IDE0075 // IDE0075: Conditional expression can be simplified
                 newBold = currentBoldSpan == null ? false : currentBoldSpan.Value.Contains(i);
-                #pragma warning restore IDE0075
 
                 ParagraphBuilder.MoveSpanToPosition(ref currentHighlightedIndex, ref currentHighlightedSpan, i, this.highlightedSpans);
-                #pragma warning disable IDE0075 // IDE0075: Conditional expression can be simplified
                 newHighlighted = currentHighlightedSpan == null ? false : currentHighlightedSpan.Value.Contains(i);
-                #pragma warning restore IDE0075
 
                 if (newBold != currentBold || newHighlighted != currentHighlighted)
                 {
@@ -134,7 +125,7 @@ namespace Microsoft.Management.UI.Internal
         }
 
         /// <summary>
-        /// Highlights all ocurrences of <paramref name="search"/>.
+        /// Highlights all occurrences of <paramref name="search"/>.
         /// This is called after all calls to AddText have been made.
         /// </summary>
         /// <param name="search">Search string.</param>
@@ -191,10 +182,7 @@ namespace Microsoft.Management.UI.Internal
         /// <param name="bold">True if the text should be bold.</param>
         internal void AddText(string str, bool bold)
         {
-            if (str == null)
-            {
-                throw new ArgumentNullException("str");
-            }
+            ArgumentNullException.ThrowIfNull(str);
 
             if (str.Length == 0)
             {
@@ -246,16 +234,16 @@ namespace Microsoft.Management.UI.Internal
         }
 
         /// <summary>
-        /// This is an auxiliar method in BuildParagraph to move the current bold or highlighed spans
+        /// This is an auxiliar method in BuildParagraph to move the current bold or highlighted spans
         /// according to the <paramref name="caracterPosition"/>
-        /// The current bold and higlighed span should be ending ahead of the current position.
+        /// The current bold and highlighted span should be ending ahead of the current position.
         /// Moves <paramref name="currentSpanIndex"/> and <paramref name="currentSpan"/> to the
-        /// propper span in <paramref name="allSpans"/> according to the <paramref name="caracterPosition"/>
+        /// proper span in <paramref name="allSpans"/> according to the <paramref name="caracterPosition"/>
         /// This is an auxiliar method in BuildParagraph.
         /// </summary>
         /// <param name="currentSpanIndex">Current index within <paramref name="allSpans"/>.</param>
         /// <param name="currentSpan">Current span within <paramref name="allSpans"/>.</param>
-        /// <param name="caracterPosition">Caracter position. This comes from a position within this.textBuilder.</param>
+        /// <param name="caracterPosition">Character position. This comes from a position within this.textBuilder.</param>
         /// <param name="allSpans">The collection of spans. This is either this.boldSpans or this.highlightedSpans.</param>
         private static void MoveSpanToPosition(ref int currentSpanIndex, ref TextSpan? currentSpan, int caracterPosition, List<TextSpan> allSpans)
         {
@@ -276,7 +264,7 @@ namespace Microsoft.Management.UI.Internal
             }
 
             // there is no span ending ahead of current position, so
-            // we set the current span to null to prevent unecessary comparisons against the currentSpan
+            // we set the current span to null to prevent unnecessary comparisons against the currentSpan
             currentSpan = null;
         }
 
@@ -288,36 +276,27 @@ namespace Microsoft.Management.UI.Internal
         /// <param name="length">Highlight length.</param>
         private void AddHighlight(int start, int length)
         {
-            if (start < 0)
-            {
-                throw new ArgumentOutOfRangeException("start");
-            }
-
-            if (start + length > this.textBuilder.Length)
-            {
-                throw new ArgumentOutOfRangeException("length");
-            }
+            ArgumentOutOfRangeException.ThrowIfNegative(start);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(start + length, this.textBuilder.Length, nameof(length));
 
             this.highlightedSpans.Add(new TextSpan(start, length));
         }
 
         /// <summary>
-        /// Called internally to notify when a proiperty changed.
+        /// Called internally to notify when a property changed.
         /// </summary>
         /// <param name="propertyName">Property name.</param>
         private void OnNotifyPropertyChanged(string propertyName)
         {
-            #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.s
             PropertyChangedEventHandler handler = this.PropertyChanged;
             if (handler != null)
             {
                 handler(this, new PropertyChangedEventArgs(propertyName));
             }
-            #pragma warning restore IDE1005
         }
 
         /// <summary>
-        /// A text span used to mark bold and highlighed segments.
+        /// A text span used to mark bold and highlighted segments.
         /// </summary>
         internal struct TextSpan
         {
@@ -338,15 +317,8 @@ namespace Microsoft.Management.UI.Internal
             /// <param name="length">Index of the last character in the span.</param>
             internal TextSpan(int start, int length)
             {
-                if (start < 0)
-                {
-                    throw new ArgumentOutOfRangeException("start");
-                }
-
-                if (length < 1)
-                {
-                    throw new ArgumentOutOfRangeException("length");
-                }
+                ArgumentOutOfRangeException.ThrowIfNegative(start);
+                ArgumentOutOfRangeException.ThrowIfLessThan(length, 1);
 
                 this.start = start;
                 this.end = start + length - 1;

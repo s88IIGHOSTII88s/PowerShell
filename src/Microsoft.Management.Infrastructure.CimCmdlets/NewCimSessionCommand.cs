@@ -54,7 +54,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
         /// The default is the current user.
         /// </summary>
         [Parameter(Position = 1, ParameterSetName = CredentialParameterSet)]
-        [Credential()]
+        [Credential]
         public PSCredential Credential { get; set; }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
         /// </summary>
         [Alias(AliasOT)]
         [Parameter(ValueFromPipelineByPropertyName = true)]
-        public UInt32 OperationTimeoutSec
+        public uint OperationTimeoutSec
         {
             get
             {
@@ -118,7 +118,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
             }
         }
 
-        private UInt32 operationTimeout;
+        private uint operationTimeout;
         internal bool operationTimeoutSet = false;
 
         /// <summary>
@@ -136,7 +136,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
         /// This is specificly for wsman protocol.
         /// </summary>
         [Parameter(ValueFromPipelineByPropertyName = true)]
-        public UInt32 Port
+        public uint Port
         {
             get
             {
@@ -150,7 +150,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
             }
         }
 
-        private UInt32 port;
+        private uint port;
         private bool portSet = false;
 
         /// <summary>
@@ -234,8 +234,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
             outputCredential = null;
             if (options != null)
             {
-                DComSessionOptions dcomOptions = options as DComSessionOptions;
-                if (dcomOptions != null)
+                if (options is DComSessionOptions dcomOptions)
                 {
                     bool conflict = false;
                     string parameterName = string.Empty;
@@ -334,10 +333,7 @@ namespace Microsoft.Management.Infrastructure.CimCmdlets
             base.DisposeInternal();
 
             // Dispose managed resources.
-            if (this.cimNewSession != null)
-            {
-                this.cimNewSession.Dispose();
-            }
+            this.cimNewSession?.Dispose();
         }
         #endregion
     }

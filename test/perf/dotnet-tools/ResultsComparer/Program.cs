@@ -20,7 +20,7 @@ using Newtonsoft.Json;
 
 namespace ResultsComparer
 {
-    public class Program
+    public sealed class Program
     {
         private const string FullBdnJsonFileExtension = "full.json";
 
@@ -191,7 +191,7 @@ namespace ResultsComparer
         private static void ExportToXml((string id, Benchmark baseResult, Benchmark diffResult, EquivalenceTestConclusion conclusion)[] notSame, FileInfo xmlPath)
         {
             if (xmlPath == null)
-            {  
+            {
                 Console.WriteLine("No file given");
                 return;
             }

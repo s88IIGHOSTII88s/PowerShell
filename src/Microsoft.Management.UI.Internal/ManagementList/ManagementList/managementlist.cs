@@ -5,7 +5,6 @@ using System;
 using System.Collections;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -51,10 +50,7 @@ namespace Microsoft.Management.UI.Internal
 
             set
             {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
+                ArgumentNullException.ThrowIfNull(value);
 
                 this.savedViewFactory = value;
             }
@@ -178,10 +174,7 @@ namespace Microsoft.Management.UI.Internal
         /// <exception cref="ArgumentNullException">The specified value is a null reference.</exception>
         public void AddColumn(InnerListColumn column)
         {
-            if (column == null)
-            {
-                throw new ArgumentNullException("column");
-            }
+            ArgumentNullException.ThrowIfNull(column);
 
             this.AddColumn(column, this.IsFilterShown);
         }
@@ -194,10 +187,7 @@ namespace Microsoft.Management.UI.Internal
         /// <exception cref="ArgumentNullException">The specified value is a null reference.</exception>
         public void AddColumn(InnerListColumn column, bool addDefaultFilterRules)
         {
-            if (column == null)
-            {
-                throw new ArgumentNullException("column");
-            }
+            ArgumentNullException.ThrowIfNull(column);
 
             this.List.Columns.Add(column);
 
@@ -230,10 +220,7 @@ namespace Microsoft.Management.UI.Internal
         /// <exception cref="ArgumentNullException">The specified value is a null reference.</exception>
         public void AddRule(FilterRule rule)
         {
-            if (rule == null)
-            {
-                throw new ArgumentNullException("rule");
-            }
+            ArgumentNullException.ThrowIfNull(rule);
 
             this.AddFilterRulePicker.ShortcutFilterRules.Add(new AddFilterRulePickerItem(new FilterRulePanelItem(rule, rule.DisplayName)));
         }
@@ -309,7 +296,6 @@ namespace Microsoft.Management.UI.Internal
 
         #region View Manager Callbacks
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         partial void OnSaveViewCanExecuteImplementation(CanExecuteRoutedEventArgs e)
         {
             string viewName = (string)e.Parameter;

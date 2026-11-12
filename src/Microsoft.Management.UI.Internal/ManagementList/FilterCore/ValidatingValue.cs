@@ -3,7 +3,6 @@
 
 using System;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace Microsoft.Management.UI.Internal
@@ -15,10 +14,26 @@ namespace Microsoft.Management.UI.Internal
     /// <typeparam name="T">
     /// The generic parameter.
     /// </typeparam>
-    [Serializable]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.MSInternal", "CA903:InternalNamespaceShouldNotContainPublicTypes")]
     public class ValidatingValue<T> : ValidatingValueBase
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidatingValue{T}"/> class.
+        /// </summary>
+        public ValidatingValue()
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidatingValue{T}"/> class.
+        /// </summary>
+        /// <param name="source">The source to initialize from.</param>
+        public ValidatingValue(ValidatingValue<T> source)
+            : base(source)
+        {
+            value = source.Value is IDeepCloneable deepClone ? deepClone.DeepClone() : source.Value;
+        }
+
         #region Properties
 
         #region Value
@@ -50,6 +65,12 @@ namespace Microsoft.Management.UI.Internal
         #endregion Properties
 
         #region Public Methods
+
+        /// <inheritdoc cref="IDeepCloneable.DeepClone()" />
+        public override object DeepClone()
+        {
+            return new ValidatingValue<T>(this);
+        }
 
         /// <summary>
         /// Gets the raw value cast/transformed into
@@ -166,10 +187,7 @@ namespace Microsoft.Management.UI.Internal
         {
             castValue = default(T);
 
-            if (rawValue == null)
-            {
-                throw new ArgumentNullException("rawValue");
-            }
+            ArgumentNullException.ThrowIfNull(rawValue);
 
             if (typeof(T).IsEnum)
             {
@@ -191,7 +209,6 @@ namespace Microsoft.Management.UI.Internal
             }
         }
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         private bool TryGetEnumValue(object rawValue, out T castValue)
         {
             Debug.Assert(rawValue != null, "rawValue not null");

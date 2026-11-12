@@ -5,21 +5,16 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management.Automation.Configuration;
 using System.Management.Automation.Internal;
-using System.Management.Automation.Language;
 using System.Management.Automation.Remoting;
-using System.Management.Automation.Runspaces;
 using System.Management.Automation.Security;
 using System.Numerics;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 #if !UNIX
@@ -29,7 +24,6 @@ using System.Text;
 using System.Threading;
 using Microsoft.PowerShell.Commands;
 using Microsoft.Win32;
-using Microsoft.Win32.SafeHandles;
 
 using TypeTable = System.Management.Automation.Runspaces.TypeTable;
 
@@ -307,9 +301,9 @@ namespace System.Management.Automation
         /// <summary>
         /// Helper fn to check byte[] arg for null.
         /// </summary>
-        ///<param name="arg"> arg to check </param>
-        ///<param name="argName"> name of the arg </param>
-        ///<returns> Does not return a value.</returns>
+        /// <param name="arg"> arg to check </param>
+        /// <param name="argName"> name of the arg </param>
+        /// <returns> Does not return a value.</returns>
         internal static void CheckKeyArg(byte[] arg, string argName)
         {
             if (arg == null)
@@ -334,9 +328,9 @@ namespace System.Management.Automation
         /// Helper fn to check arg for empty or null.
         /// Throws ArgumentNullException on either condition.
         /// </summary>
-        ///<param name="arg"> arg to check </param>
-        ///<param name="argName"> name of the arg </param>
-        ///<returns> Does not return a value.</returns>
+        /// <param name="arg"> arg to check </param>
+        /// <param name="argName"> name of the arg </param>
+        /// <returns> Does not return a value.</returns>
         internal static void CheckArgForNullOrEmpty(string arg, string argName)
         {
             if (arg == null)
@@ -353,9 +347,9 @@ namespace System.Management.Automation
         /// Helper fn to check arg for null.
         /// Throws ArgumentNullException on either condition.
         /// </summary>
-        ///<param name="arg"> arg to check </param>
-        ///<param name="argName"> name of the arg </param>
-        ///<returns> Does not return a value.</returns>
+        /// <param name="arg"> arg to check </param>
+        /// <param name="argName"> name of the arg </param>
+        /// <returns> Does not return a value.</returns>
         internal static void CheckArgForNull(object arg, string argName)
         {
             if (arg == null)
@@ -367,9 +361,9 @@ namespace System.Management.Automation
         /// <summary>
         /// Helper fn to check arg for null.
         /// </summary>
-        ///<param name="arg"> arg to check </param>
-        ///<param name="argName"> name of the arg </param>
-        ///<returns> Does not return a value.</returns>
+        /// <param name="arg"> arg to check </param>
+        /// <param name="argName"> name of the arg </param>
+        /// <returns> Does not return a value.</returns>
         internal static void CheckSecureStringArg(SecureString arg, string argName)
         {
             if (arg == null)
@@ -378,7 +372,6 @@ namespace System.Management.Automation
             }
         }
 
-        [ArchitectureSensitive]
         internal static string GetStringFromSecureString(SecureString ss)
         {
             IntPtr p = IntPtr.Zero;
@@ -482,15 +475,43 @@ namespace System.Management.Automation
 
             return string.Empty;
         }
+
+        private static string s_packageFamilyName;
+        private static bool? s_isMSIXInstallation;
+
+        /// <summary>
+        /// Determine whether the current process has package (MSIX) identity, caching the result
+        /// so the native API is only called once.
+        /// </summary>
+        /// <param name="packageFamilyName">Receives the package family name when the process has package identity; otherwise null.</param>
+        /// <returns>True if the current process has package (MSIX) identity; otherwise false.</returns>
+        internal static bool IsMSIXInstallation(out string packageFamilyName)
+        {
+            if (s_isMSIXInstallation is null)
+            {
+                s_packageFamilyName = Interop.Windows.GetCurrentPackageFamilyName();
+                s_isMSIXInstallation = s_packageFamilyName is not null;
+            }
+
+            packageFamilyName = s_packageFamilyName;
+            return s_isMSIXInstallation.Value;
+        }
 #endif
 
         internal static string DefaultPowerShellAppBase => GetApplicationBase(DefaultPowerShellShellID);
 
         internal static string GetApplicationBase(string shellId)
         {
-            // Use the location of SMA.dll as the application base.
-            Assembly assembly = typeof(PSObject).Assembly;
-            return Path.GetDirectoryName(assembly.Location);
+            // Use the location of SMA.dll as the application base if it exists,
+            // otherwise, use the base directory from `AppContext`.
+            var baseDirectory = Path.GetDirectoryName(typeof(PSObject).Assembly.Location);
+            if (string.IsNullOrEmpty(baseDirectory))
+            {
+                // Need to remove any trailing directory separator characters
+                baseDirectory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            }
+
+            return baseDirectory;
         }
 
         private static string[] s_productFolderDirectories;
@@ -576,10 +597,7 @@ namespace System.Management.Automation
             catch (ObjectDisposedException) { }
             finally
             {
-                if (winPEKey != null)
-                {
-                    winPEKey.Dispose();
-                }
+                winPEKey?.Dispose();
             }
 #endif
             return false;
@@ -646,41 +664,6 @@ namespace System.Management.Automation
         }
 
         /// <summary>
-        /// Checks whether current monad session supports version specified
-        /// by ver.
-        /// </summary>
-        /// <param name="ver">Version to check.</param>
-        /// <returns>True if supported, false otherwise.</returns>
-        internal static bool IsPSVersionSupported(string ver)
-        {
-            // Convert version to supported format ie., x.x
-            Version inputVersion = StringToVersion(ver);
-            return IsPSVersionSupported(inputVersion);
-        }
-
-        /// <summary>
-        /// Checks whether current monad session supports version specified
-        /// by checkVersion.
-        /// </summary>
-        /// <param name="checkVersion">Version to check.</param>
-        /// <returns>True if supported, false otherwise.</returns>
-        internal static bool IsPSVersionSupported(Version checkVersion)
-        {
-            if (checkVersion == null)
-            {
-                return false;
-            }
-
-            foreach (Version compatibleVersion in PSVersionInfo.PSCompatibleVersions)
-            {
-                if (checkVersion.Major == compatibleVersion.Major && checkVersion.Minor <= compatibleVersion.Minor)
-                    return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Checks whether current PowerShell session supports edition specified
         /// by checkEdition.
         /// </summary>
@@ -688,7 +671,7 @@ namespace System.Management.Automation
         /// <returns>True if supported, false otherwise.</returns>
         internal static bool IsPSEditionSupported(string checkEdition)
         {
-            return PSVersionInfo.PSEdition.Equals(checkEdition, StringComparison.OrdinalIgnoreCase);
+            return PSVersionInfo.PSEditionValue.Equals(checkEdition, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -698,7 +681,7 @@ namespace System.Management.Automation
         /// <returns>True if the edition is supported by this runtime, false otherwise.</returns>
         internal static bool IsPSEditionSupported(IEnumerable<string> editions)
         {
-            string currentPSEdition = PSVersionInfo.PSEdition;
+            string currentPSEdition = PSVersionInfo.PSEditionValue;
             foreach (string edition in editions)
             {
                 if (currentPSEdition.Equals(edition, StringComparison.OrdinalIgnoreCase))
@@ -1069,10 +1052,7 @@ namespace System.Management.Automation
                     finally
                     {
                         context.AutoLoadingModuleInProgress.Remove(module);
-                        if (ps != null)
-                        {
-                            ps.Dispose();
-                        }
+                        ps?.Dispose();
                     }
                 }
             }
@@ -1129,10 +1109,7 @@ namespace System.Management.Automation
             }
             finally
             {
-                if (ps != null)
-                {
-                    ps.Dispose();
-                }
+                ps?.Dispose();
             }
 
             return result;
@@ -1190,10 +1167,7 @@ namespace System.Management.Automation
             }
             finally
             {
-                if (ps != null)
-                {
-                    ps.Dispose();
-                }
+                ps?.Dispose();
             }
 
             return result;
@@ -1283,7 +1257,7 @@ namespace System.Management.Automation
             return false;
         }
 
-        internal static bool PathIsUnc(string path)
+        internal static bool PathIsUnc(string path, bool networkOnly = false)
         {
 #if UNIX
             return false;
@@ -1293,14 +1267,24 @@ namespace System.Management.Automation
                 return false;
             }
 
-            // handle special cases like \\wsl$\ubuntu which isn't a UNC path, but we can say it is so the filesystemprovider can use it
-            if (path.StartsWith(WslRootPath, StringComparison.OrdinalIgnoreCase))
+            // handle special cases like '\\wsl$\ubuntu', '\\?\', and '\\.\pipe\' which aren't a UNC path, but we can say it is so the filesystemprovider can use it
+            if (!networkOnly && (path.StartsWith(WslRootPath, StringComparison.OrdinalIgnoreCase) || PathIsDevicePath(path)))
             {
                 return true;
             }
 
             Uri uri;
             return Uri.TryCreate(path, UriKind.Absolute, out uri) && uri.IsUnc;
+#endif
+        }
+
+        internal static bool PathIsDevicePath(string path)
+        {
+#if UNIX
+            return false;
+#else
+            // device paths can be network paths, we would need windows to parse it.
+            return path.StartsWith(@"\\.\") || path.StartsWith(@"\\?\") || path.StartsWith(@"\\;");
 #endif
         }
 
@@ -1397,9 +1381,6 @@ namespace System.Management.Automation
         //     Add-Member ScriptProperty Preamble { $this.GetEncoding().GetPreamble() -join "-" } -PassThru |
         //     Format-Table -Auto
 
-        internal static readonly UTF8Encoding utf8NoBom =
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
 #if !UNIX
         /// <summary>
         /// Queues a CLR worker thread with impersonation of provided Windows identity.
@@ -1447,7 +1428,7 @@ namespace System.Management.Automation
         /// <returns>Command name and as appropriate Module name in out parameter.</returns>
         internal static string ParseCommandName(string commandName, out string moduleName)
         {
-            var names = commandName.Split(Separators.Backslash, 2);
+            var names = commandName.Split('\\', 2);
             if (names.Length == 2)
             {
                 moduleName = names[0];
@@ -1474,22 +1455,8 @@ namespace System.Management.Automation
             internal static readonly char[] Backslash = new char[] { '\\' };
             internal static readonly char[] Directory = new char[] { '\\', '/' };
             internal static readonly char[] DirectoryOrDrive = new char[] { '\\', '/', ':' };
-
-            internal static readonly char[] Colon = new char[] { ':' };
-            internal static readonly char[] Dot = new char[] { '.' };
-            internal static readonly char[] Pipe = new char[] { '|' };
-            internal static readonly char[] Comma = new char[] { ',' };
-            internal static readonly char[] Semicolon = new char[] { ';' };
-            internal static readonly char[] StarOrQuestion = new char[] { '*', '?' };
-            internal static readonly char[] ColonOrBackslash = new char[] { '\\', ':' };
-            internal static readonly char[] PathSeparator = new char[] { Path.PathSeparator };
-
-            internal static readonly char[] QuoteChars = new char[] { '\'', '"' };
-            internal static readonly char[] Space = new char[] { ' ' };
-            internal static readonly char[] QuotesSpaceOrTab = new char[] { ' ', '\t', '\'', '"' };
             internal static readonly char[] SpaceOrTab = new char[] { ' ', '\t' };
-            internal static readonly char[] Newline = new char[] { '\n' };
-            internal static readonly char[] CrLf = new char[] { '\r', '\n' };
+            internal static readonly char[] StarOrQuestion = new char[] { '*', '?' };
 
             // (Copied from System.IO.Path so we can call TrimEnd in the same way that Directory.EnumerateFiles would on the search patterns).
             // Trim trailing white spaces, tabs etc but don't be aggressive in removing everything that has UnicodeCategory of trailing space.
@@ -1528,538 +1495,146 @@ namespace System.Management.Automation
         ///     NoLanguage          ->  NoLanguage.
         /// </summary>
         /// <param name="context">ExecutionContext.</param>
-        /// <returns>Previous language mode or null for no language mode change.</returns>
-        internal static PSLanguageMode? EnforceSystemLockDownLanguageMode(ExecutionContext context)
+        /// <returns>The current ExecutionContext language mode.</returns>
+        internal static PSLanguageMode EnforceSystemLockDownLanguageMode(ExecutionContext context)
         {
-            PSLanguageMode? oldMode = null;
-
-            if (SystemPolicy.GetSystemLockdownPolicy() == SystemEnforcementMode.Enforce)
+            switch (SystemPolicy.GetSystemLockdownPolicy())
             {
-                switch (context.LanguageMode)
-                {
-                    case PSLanguageMode.FullLanguage:
-                        oldMode = context.LanguageMode;
-                        context.LanguageMode = PSLanguageMode.ConstrainedLanguage;
-                        break;
-
-                    case PSLanguageMode.RestrictedLanguage:
-                        oldMode = context.LanguageMode;
-                        context.LanguageMode = PSLanguageMode.NoLanguage;
-                        break;
-
-                    case PSLanguageMode.ConstrainedLanguage:
-                    case PSLanguageMode.NoLanguage:
-                        break;
-
-                    default:
-                        Diagnostics.Assert(false, "Unexpected PSLanguageMode");
-                        oldMode = context.LanguageMode;
-                        context.LanguageMode = PSLanguageMode.NoLanguage;
-                        break;
-                }
-            }
-
-            return oldMode;
-        }
-
-        #region Implicit Remoting Batching
-
-        // Commands allowed to run on target remote session along with implicit remote commands
-        private static readonly HashSet<string> AllowedCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "ForEach-Object",
-            "Measure-Command",
-            "Measure-Object",
-            "Sort-Object",
-            "Where-Object"
-        };
-
-        // Determines if the typed command invokes implicit remoting module proxy functions in such
-        // a way as to allow simple batching, to reduce round trips between client and server sessions.
-        // Requirements:
-        //  a. All commands must be implicit remoting module proxy commands targeted to the same remote session
-        //  b. Except for *allowed* commands that can be safely run on remote session rather than client session
-        //  c. Commands must be in a simple pipeline
-        internal static bool TryRunAsImplicitBatch(string command, Runspace runspace)
-        {
-            using (var ps = System.Management.Automation.PowerShell.Create())
-            {
-                ps.Runspace = runspace;
-
-                try
-                {
-                    var scriptBlock = ScriptBlock.Create(command);
-                    if (!(scriptBlock.Ast is ScriptBlockAst scriptBlockAst))
+                case SystemEnforcementMode.Enforce:
+                    switch (context.LanguageMode)
                     {
-                        return false;
-                    }
-
-                    // Make sure that this is a simple pipeline
-                    string errorId;
-                    string errorMsg;
-                    scriptBlockAst.GetSimplePipeline(true, out errorId, out errorMsg);
-                    if (errorId != null)
-                    {
-                        WriteVerbose(ps, ParserStrings.ImplicitRemotingPipelineBatchingNotASimplePipeline);
-                        return false;
-                    }
-
-                    // Run checker
-                    var checker = new PipelineForBatchingChecker { ScriptBeingConverted = scriptBlockAst };
-                    scriptBlockAst.InternalVisit(checker);
-
-                    // If this is just a single command, there is no point in batching it
-                    if (checker.Commands.Count < 2)
-                    {
-                        return false;
-                    }
-
-                    // We have a valid batching candidate
-
-                    // Check commands
-                    if (!TryGetCommandInfoList(ps, checker.Commands, out Collection<CommandInfo> cmdInfoList))
-                    {
-                        return false;
-                    }
-
-                    // All command modules must be implicit remoting modules from the same PSSession
-                    var success = true;
-                    var psSessionId = Guid.Empty;
-                    foreach (var cmdInfo in cmdInfoList)
-                    {
-                        // Check for allowed command
-                        string cmdName = (cmdInfo is AliasInfo aliasInfo) ? aliasInfo.ReferencedCommand.Name : cmdInfo.Name;
-                        if (AllowedCommands.Contains(cmdName))
-                        {
-                            continue;
-                        }
-
-                        // Commands must be from implicit remoting module
-                        if (cmdInfo.Module == null || string.IsNullOrEmpty(cmdInfo.ModuleName))
-                        {
-                            WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, ParserStrings.ImplicitRemotingPipelineBatchingNotImplicitCommand, cmdInfo.Name));
-                            success = false;
+                        case PSLanguageMode.FullLanguage:
+                            context.LanguageMode = PSLanguageMode.ConstrainedLanguage;
                             break;
-                        }
 
-                        // Commands must be from modules imported into the same remote session
-                        if (cmdInfo.Module.PrivateData is System.Collections.Hashtable privateData)
-                        {
-                            var sessionIdString = privateData["ImplicitSessionId"] as string;
-                            if (string.IsNullOrEmpty(sessionIdString))
-                            {
-                                WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, ParserStrings.ImplicitRemotingPipelineBatchingNotImplicitCommand, cmdInfo.Name));
-                                success = false;
-                                break;
-                            }
-
-                            var sessionId = new Guid(sessionIdString);
-                            if (psSessionId == Guid.Empty)
-                            {
-                                psSessionId = sessionId;
-                            }
-                            else if (psSessionId != sessionId)
-                            {
-                                WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, ParserStrings.ImplicitRemotingPipelineBatchingWrongSession, cmdInfo.Name));
-                                success = false;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, ParserStrings.ImplicitRemotingPipelineBatchingNotImplicitCommand, cmdInfo.Name));
-                            success = false;
+                        case PSLanguageMode.RestrictedLanguage:
+                            context.LanguageMode = PSLanguageMode.NoLanguage;
                             break;
-                        }
-                    }
 
-                    if (success)
+                        case PSLanguageMode.ConstrainedLanguage:
+                        case PSLanguageMode.NoLanguage:
+                            break;
+
+                        default:
+                            Diagnostics.Assert(false, "Unexpected PSLanguageMode");
+                            context.LanguageMode = PSLanguageMode.NoLanguage;
+                            break;
+                    }
+                    break;
+
+                case SystemEnforcementMode.Audit:
+                    switch (context.LanguageMode)
                     {
-                        //
-                        // Invoke command pipeline as entire pipeline on remote session
-                        //
-
-                        // Update script to declare variables via Using keyword
-                        if (checker.ValidVariables.Count > 0)
-                        {
-                            foreach (var variableName in checker.ValidVariables)
-                            {
-                                command = command.Replace(variableName, ("Using:" + variableName), StringComparison.OrdinalIgnoreCase);
-                            }
-
-                            scriptBlock = ScriptBlock.Create(command);
-                        }
-
-                        // Retrieve the PSSession runspace in which to run the batch script on
-                        ps.Commands.Clear();
-                        ps.Commands.AddCommand("Get-PSSession").AddParameter("InstanceId", psSessionId);
-                        var psSession = ps.Invoke<System.Management.Automation.Runspaces.PSSession>().FirstOrDefault();
-                        if (psSession == null || (ps.Streams.Error.Count > 0) || (psSession.Availability != RunspaceAvailability.Available))
-                        {
-                            WriteVerbose(ps, ParserStrings.ImplicitRemotingPipelineBatchingNoPSSession);
-                            return false;
-                        }
-
-                        WriteVerbose(ps, ParserStrings.ImplicitRemotingPipelineBatchingSuccess);
-
-                        // Create and invoke implicit remoting command pipeline
-                        ps.Commands.Clear();
-                        ps.AddCommand("Invoke-Command").AddParameter("Session", psSession).AddParameter("ScriptBlock", scriptBlock).AddParameter("HideComputerName", true)
-                            .AddCommand("Out-Default");
-                        foreach (var cmd in ps.Commands.Commands)
-                        {
-                            cmd.MergeMyResults(PipelineResultTypes.Error, PipelineResultTypes.Output);
-                        }
-
-                        try
-                        {
-                            ps.Invoke();
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorRecord = new ErrorRecord(ex, "ImplicitRemotingBatchExecutionTerminatingError", ErrorCategory.InvalidOperation, null);
-
-                            ps.Commands.Clear();
-                            ps.AddCommand("Write-Error").AddParameter("InputObject", errorRecord).Invoke();
-                        }
-
-                        return true;
+                        case PSLanguageMode.FullLanguage:
+                            // Set to ConstrainedLanguage mode.  But no restrictions are applied in audit mode
+                            // and only audit messages will be emitted to logs.
+                            context.LanguageMode = PSLanguageMode.ConstrainedLanguage;
+                            break;
                     }
-                }
-                catch (ImplicitRemotingBatchingNotSupportedException ex)
-                {
-                    WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, "{0} : {1}", ex.Message, ex.ErrorId));
-                }
-                catch (Exception ex)
-                {
-                    WriteVerbose(ps, string.Format(CultureInfo.CurrentCulture, ParserStrings.ImplicitRemotingPipelineBatchingException, ex.Message));
-                }
+                    break;
             }
 
-            return false;
+            return context.LanguageMode;
         }
 
-        private static void WriteVerbose(PowerShell ps, string msg)
+        internal static string DisplayHumanReadableFileSize(long bytes)
         {
-            ps.Commands.Clear();
-            ps.AddCommand("Write-Verbose").AddParameter("Message", msg).Invoke();
+            return bytes switch
+            {
+                < 1024 and >= 0 => $"{bytes} Bytes",
+                < 1048576 and >= 1024 => $"{(bytes / 1024.0).ToString("0.0")} KB",
+                < 1073741824 and >= 1048576 => $"{(bytes / 1048576.0).ToString("0.0")} MB",
+                < 1099511627776 and >= 1073741824 => $"{(bytes / 1073741824.0).ToString("0.000")} GB",
+                < 1125899906842624 and >= 1099511627776 => $"{(bytes / 1099511627776.0).ToString("0.00000")} TB",
+                < 1152921504606847000 and >= 1125899906842624 => $"{(bytes / 1125899906842624.0).ToString("0.0000000")} PB",
+                >= 1152921504606847000 => $"{(bytes / 1152921504606847000.0).ToString("0.000000000")} EB",
+                _ => $"0 Bytes",
+            };
         }
 
-        private const string WhereObjectCommandAlias = "?";
-
-        private static bool TryGetCommandInfoList(PowerShell ps, HashSet<string> commandNames, out Collection<CommandInfo> cmdInfoList)
+        /// <summary>
+        /// Returns true if the current session is restricted (JEA or similar sessions)
+        /// </summary>
+        /// <param name="context">ExecutionContext.</param>
+        /// <returns>True if the session is restricted.</returns>
+        internal static bool IsSessionRestricted(ExecutionContext context)
         {
-            if (commandNames.Count == 0)
-            {
-                cmdInfoList = null;
-                return false;
-            }
-
-            bool specialCaseWhereCommandAlias = commandNames.Contains(WhereObjectCommandAlias);
-            if (specialCaseWhereCommandAlias)
-            {
-                commandNames.Remove(WhereObjectCommandAlias);
-            }
-
-            // Use Get-Command to collect CommandInfo from candidate commands, with correct precedence so
-            // that implicit remoting proxy commands will appear when available.
-            ps.Commands.Clear();
-            ps.Commands.AddCommand("Get-Command").AddParameter("Name", commandNames.ToArray());
-            cmdInfoList = ps.Invoke<CommandInfo>();
-            if (ps.Streams.Error.Count > 0)
+            CmdletInfo cmdletInfo = context.SessionState.InvokeCommand.GetCmdlet("Microsoft.PowerShell.Core\\Import-Module");
+            // if import-module is visible, then the session is not restricted,
+            // because the user can load arbitrary code.
+            if (cmdletInfo != null && cmdletInfo.Visibility == SessionStateEntryVisibility.Public)
             {
                 return false;
             }
-
-            // For special case '?' alias don't use Get-Command to retrieve command info, and instead
-            // use the GetCommand API.
-            if (specialCaseWhereCommandAlias)
-            {
-                var cmdInfo = ps.Runspace.ExecutionContext.SessionState.InvokeCommand.GetCommand(WhereObjectCommandAlias, CommandTypes.Alias);
-                if (cmdInfo == null)
-                {
-                    return false;
-                }
-
-                cmdInfoList.Add(cmdInfo);
-            }
-
             return true;
         }
 
-        internal static bool ShouldOutputPlainText(bool isHost, bool? supportsVirtualTerminal)
+        /// <summary>
+        /// Determine whether the environment variable is set and how.
+        /// </summary>
+        /// <param name="name">The name of the environment variable.</param>
+        /// <param name="defaultValue">If the environment variable is not set, use this as the default value.</param>
+        /// <returns>A boolean representing the value of the environment variable.</returns>
+        internal static bool GetEnvironmentVariableAsBool(string name, bool defaultValue)
         {
-            var outputRendering = OutputRendering.Ansi;
-
-            if (ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+            var str = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrEmpty(str))
             {
-                if (supportsVirtualTerminal != false)
+                return defaultValue;
+            }
+
+            var boolStr = str.AsSpan();
+
+            if (boolStr.Length == 1)
+            {
+                if (boolStr[0] == '1')
                 {
-                    switch (PSStyle.Instance.OutputRendering)
-                    {
-                        case OutputRendering.Automatic:
-                            outputRendering = OutputRendering.Ansi;
-                            break;
-                        case OutputRendering.Host:
-                            outputRendering = isHost ? OutputRendering.Ansi : OutputRendering.PlainText;
-                            break;
-                        default:
-                            outputRendering = PSStyle.Instance.OutputRendering;
-                            break;
-                    }
+                    return true;
+                }
+
+                if (boolStr[0] == '0')
+                {
+                    return false;
                 }
             }
 
-            return outputRendering == OutputRendering.PlainText;
-        }
-
-        internal static string GetOutputString(string s, bool isHost, bool? supportsVirtualTerminal = null, bool isOutputRedirected = false)
-        {
-            if (ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+            if (boolStr.Length == 3 &&
+                (boolStr[0] == 'y' || boolStr[0] == 'Y') &&
+                (boolStr[1] == 'e' || boolStr[1] == 'E') &&
+                (boolStr[2] == 's' || boolStr[2] == 'S'))
             {
-                var sd = new ValueStringDecorated(s);
-
-                if (sd.IsDecorated)
-                {
-                    var outputRendering = OutputRendering.Ansi;
-                    if (InternalTestHooks.BypassOutputRedirectionCheck)
-                    {
-                        isOutputRedirected = false;
-                    }
-
-                    if (isOutputRedirected || ShouldOutputPlainText(isHost, supportsVirtualTerminal))
-                    {
-                        outputRendering = OutputRendering.PlainText;
-                    }
-
-                    s = sd.ToString(outputRendering);
-                }
+                return true;
             }
 
-            return s;
-        }
-
-        internal enum FormatStyle
-        {
-            Reset,
-            FormatAccent,
-            TableHeader,
-            ErrorAccent,
-            Error,
-            Warning,
-            Verbose,
-            Debug,
-        }
-
-        internal static string GetFormatStyleString(FormatStyle formatStyle)
-        {
-            // redirected console gets plaintext output to preserve existing behavior
-            if (!InternalTestHooks.BypassOutputRedirectionCheck &&
-                ((PSStyle.Instance.OutputRendering == OutputRendering.PlainText) ||
-                (formatStyle == FormatStyle.Error && Console.IsErrorRedirected) ||
-                (formatStyle != FormatStyle.Error && Console.IsOutputRedirected)))
+            if (boolStr.Length == 2 &&
+                (boolStr[0] == 'n' || boolStr[0] == 'N') &&
+                (boolStr[1] == 'o' || boolStr[1] == 'O'))
             {
-                return string.Empty;
+                return false;
             }
 
-            if (ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+            if (boolStr.Length == 4 &&
+                (boolStr[0] == 't' || boolStr[0] == 'T') &&
+                (boolStr[1] == 'r' || boolStr[1] == 'R') &&
+                (boolStr[2] == 'u' || boolStr[2] == 'U') &&
+                (boolStr[3] == 'e' || boolStr[3] == 'E'))
             {
-                PSStyle psstyle = PSStyle.Instance;                
-                switch (formatStyle)
-                {
-                    case FormatStyle.Reset:
-                        return psstyle.Reset;
-                    case FormatStyle.FormatAccent:
-                        return psstyle.Formatting.FormatAccent;
-                    case FormatStyle.TableHeader:
-                        return psstyle.Formatting.TableHeader;
-                    case FormatStyle.ErrorAccent:
-                        return psstyle.Formatting.ErrorAccent;
-                    case FormatStyle.Error:
-                        return psstyle.Formatting.Error;
-                    case FormatStyle.Warning:
-                        return psstyle.Formatting.Warning;
-                    case FormatStyle.Verbose:
-                        return psstyle.Formatting.Verbose;
-                    case FormatStyle.Debug:
-                        return psstyle.Formatting.Debug;
-                    default:
-                        return string.Empty;
-                }
+                return true;
             }
 
-            return string.Empty;
-        }
-
-        #endregion
-    }
-
-    #region ImplicitRemotingBatching
-
-    // A visitor to walk an AST and validate that it is a candidate for implicit remoting batching.
-    // Based on ScriptBlockToPowerShellChecker.
-    internal class PipelineForBatchingChecker : AstVisitor
-    {
-        internal readonly HashSet<string> ValidVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        internal readonly HashSet<string> Commands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        internal ScriptBlockAst ScriptBeingConverted { get; set; }
-
-        public override AstVisitAction VisitVariableExpression(VariableExpressionAst variableExpressionAst)
-        {
-            if (!variableExpressionAst.VariablePath.IsAnyLocal())
+            if (boolStr.Length == 5 &&
+                (boolStr[0] == 'f' || boolStr[0] == 'F') &&
+                (boolStr[1] == 'a' || boolStr[1] == 'A') &&
+                (boolStr[2] == 'l' || boolStr[2] == 'L') &&
+                (boolStr[3] == 's' || boolStr[3] == 'S') &&
+                (boolStr[4] == 'e' || boolStr[4] == 'E'))
             {
-                ThrowError(
-                        new ImplicitRemotingBatchingNotSupportedException(
-                            "VariableTypeNotSupported"),
-                        variableExpressionAst);
+                return false;
             }
 
-            if (variableExpressionAst.VariablePath.UnqualifiedPath != "_")
-            {
-                ValidVariables.Add(variableExpressionAst.VariablePath.UnqualifiedPath);
-            }
-
-            return AstVisitAction.Continue;
-        }
-
-        public override AstVisitAction VisitPipeline(PipelineAst pipelineAst)
-        {
-            if (pipelineAst.PipelineElements[0] is CommandExpressionAst)
-            {
-                // If the first element is a CommandExpression, this pipeline should be the value
-                // of a parameter. We want to avoid a scriptblock that contains only a pure expression.
-                // The check "pipelineAst.Parent.Parent == ScriptBeingConverted" guarantees we throw
-                // error on that kind of scriptblock.
-
-                // Disallow pure expressions at the "top" level, but allow them otherwise.
-                // We want to catch:
-                //     1 | echo
-                // But we don't want to error out on:
-                //     echo $(1)
-                // See the comment in VisitCommand on why it's safe to check Parent.Parent, we
-                // know that we have at least:
-                //     * a NamedBlockAst (the end block)
-                //     * a ScriptBlockAst (the ast we're comparing to)
-                if (pipelineAst.GetPureExpression() == null || pipelineAst.Parent.Parent == ScriptBeingConverted)
-                {
-                    ThrowError(
-                        new ImplicitRemotingBatchingNotSupportedException(
-                            "PipelineStartingWithExpressionNotSupported"),
-                        pipelineAst);
-                }
-            }
-
-            return AstVisitAction.Continue;
-        }
-
-        public override AstVisitAction VisitCommand(CommandAst commandAst)
-        {
-            if (commandAst.InvocationOperator == TokenKind.Dot)
-            {
-                ThrowError(
-                    new ImplicitRemotingBatchingNotSupportedException(
-                        "DotSourcingNotSupported"),
-                    commandAst);
-            }
-
-            /*
-            // Up front checking ensures that we have a simple script block,
-            // so we can safely assume that the parents are:
-            //     * a PipelineAst
-            //     * a NamedBlockAst (the end block)
-            //     * a ScriptBlockAst (the ast we're comparing to)
-            // If that isn't the case, the conversion isn't allowed.  It
-            // is also safe to assume that we have at least 3 parents, a script block can't be simpler.
-            if (commandAst.Parent.Parent.Parent != ScriptBeingConverted)
-            {
-                ThrowError(
-                    new ImplicitRemotingBatchingNotSupportedException(
-                        "CantConvertWithCommandInvocations not supported"),
-                    commandAst);
-            }
-            */
-
-            if (commandAst.CommandElements[0] is ScriptBlockExpressionAst)
-            {
-                ThrowError(
-                    new ImplicitRemotingBatchingNotSupportedException(
-                        "ScriptBlockInvocationNotSupported"),
-                    commandAst);
-            }
-
-            var commandName = commandAst.GetCommandName();
-            if (commandName != null)
-            {
-                Commands.Add(commandName);
-            }
-
-            return AstVisitAction.Continue;
-        }
-
-        public override AstVisitAction VisitMergingRedirection(MergingRedirectionAst redirectionAst)
-        {
-            if (redirectionAst.ToStream != RedirectionStream.Output)
-            {
-                ThrowError(
-                    new ImplicitRemotingBatchingNotSupportedException(
-                        "MergeRedirectionNotSupported"),
-                    redirectionAst);
-            }
-
-            return AstVisitAction.Continue;
-        }
-
-        public override AstVisitAction VisitFileRedirection(FileRedirectionAst redirectionAst)
-        {
-            ThrowError(
-                new ImplicitRemotingBatchingNotSupportedException(
-                    "FileRedirectionNotSupported"),
-                redirectionAst);
-
-            return AstVisitAction.Continue;
-        }
-
-        /*
-        public override AstVisitAction VisitScriptBlockExpression(ScriptBlockExpressionAst scriptBlockExpressionAst)
-        {
-            ThrowError(new ImplicitRemotingBatchingNotSupportedException(
-                           "ScriptBlocks not supported"),
-                       scriptBlockExpressionAst);
-
-            return AstVisitAction.SkipChildren;
-        }
-        */
-
-        public override AstVisitAction VisitUsingExpression(UsingExpressionAst usingExpressionAst)
-        {
-            // Using expressions are not expected in Implicit remoting commands.
-            ThrowError(new ImplicitRemotingBatchingNotSupportedException(
-                "UsingExpressionNotSupported"),
-                usingExpressionAst);
-
-            return AstVisitAction.SkipChildren;
-        }
-
-        internal static void ThrowError(ImplicitRemotingBatchingNotSupportedException ex, Ast ast)
-        {
-            InterpreterError.UpdateExceptionErrorRecordPosition(ex, ast.Extent);
-            throw ex;
+            return defaultValue;
         }
     }
-
-    internal class ImplicitRemotingBatchingNotSupportedException : Exception
-    {
-        internal string ErrorId { get; }
-
-        internal ImplicitRemotingBatchingNotSupportedException(string errorId) : base(
-            ParserStrings.ImplicitRemotingPipelineBatchingNotSupported)
-        {
-            ErrorId = errorId;
-        }
-    }
-
-    #endregion
 }
 
 namespace System.Management.Automation.Internal
@@ -2074,9 +1649,12 @@ namespace System.Management.Automation.Internal
         internal static bool BypassAppLockerPolicyCaching;
         internal static bool BypassOnlineHelpRetrieval;
         internal static bool ForcePromptForChoiceDefaultOption;
-        internal static bool BypassOutputRedirectionCheck;
         internal static bool NoPromptForPassword;
         internal static bool ForceFormatListFixedLabelWidth;
+
+        // Update-Help tests
+        internal static bool ThrowHelpCultureNotSupported;
+        internal static CultureInfo CurrentUICulture;
 
         // Stop/Restart/Rename Computer tests
         internal static bool TestStopComputer;
@@ -2093,6 +1671,11 @@ namespace System.Management.Automation.Internal
         internal static bool SetConsoleWidthToZero;
         internal static bool SetConsoleHeightToZero;
 
+        // Simulate 'MyDocuments' returning empty string
+        internal static bool SetMyDocumentsSpecialFolderToBlank;
+
+        internal static bool SetDate;
+
         // A location to test PSEdition compatibility functionality for Windows PowerShell modules with
         // since we can't manipulate the System32 directory in a test
         internal static string TestWindowsPowerShellPSHomeLocation;
@@ -2104,27 +1687,22 @@ namespace System.Management.Automation.Internal
 
         internal static bool ThrowExdevErrorOnMoveDirectory;
 
+        // To emulate OneDrive behavior we use the hard-coded symlink.
+        // If OneDriveTestRecurseOn is false then the symlink works as regular symlink.
+        // If OneDriveTestRecurseOn is true then we recurse into the symlink as OneDrive should work.
+        // OneDriveTestSymlinkName defines the symlink name used in tests.
+        internal static bool OneDriveTestOn;
+        internal static bool OneDriveTestRecurseOn;
+        internal static string OneDriveTestSymlinkName = "link-Beta";
+
+        // Test out smaller connection buffer size when calling WNetGetConnection.
+        internal static int WNetGetConnectionBufferSize = -1;
+
         /// <summary>This member is used for internal test purposes.</summary>
         public static void SetTestHook(string property, object value)
         {
             var fieldInfo = typeof(InternalTestHooks).GetField(property, BindingFlags.Static | BindingFlags.NonPublic);
-            if (fieldInfo != null)
-            {
-                fieldInfo.SetValue(null, value);
-            }
-        }
-
-        /// <summary>
-        /// Test hook used to test implicit remoting batching.  A local runspace must be provided that has imported a
-        /// remote session, i.e., has run the Import-PSSession cmdlet.  This hook will return true if the provided commandPipeline
-        /// is successfully batched and run in the remote session, and false if it is rejected for batching.
-        /// </summary>
-        /// <param name="commandPipeline">Command pipeline to test.</param>
-        /// <param name="runspace">Runspace with imported remote session.</param>
-        /// <returns>True if commandPipeline is batched successfully.</returns>
-        public static bool TestImplicitRemotingBatching(string commandPipeline, System.Management.Automation.Runspaces.Runspace runspace)
-        {
-            return Utils.TryRunAsImplicitBatch(commandPipeline, runspace);
+            fieldInfo?.SetValue(null, value);
         }
 
         /// <summary>
@@ -2262,10 +1840,7 @@ namespace System.Management.Automation.Internal
         /// </summary>
         internal ReadOnlyBag(HashSet<T> hashset)
         {
-            if (hashset == null)
-            {
-                throw new ArgumentNullException(nameof(hashset));
-            }
+            ArgumentNullException.ThrowIfNull(hashset);
 
             _hashset = hashset;
         }
@@ -2301,35 +1876,11 @@ namespace System.Management.Automation.Internal
     /// </summary>
     internal static class Requires
     {
-        internal static void NotNull(object value, string paramName)
-        {
-            if (value == null)
-            {
-                throw new ArgumentNullException(paramName);
-            }
-        }
-
-        internal static void NotNullOrEmpty(string value, string paramName)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                throw new ArgumentNullException(paramName);
-            }
-        }
-
         internal static void NotNullOrEmpty(ICollection value, string paramName)
         {
-            if (value == null || value.Count == 0)
+            if (value is null || value.Count == 0)
             {
                 throw new ArgumentNullException(paramName);
-            }
-        }
-
-        internal static void Condition([DoesNotReturnIf(false)] bool precondition, string paramName)
-        {
-            if (!precondition)
-            {
-                throw new ArgumentException(paramName);
             }
         }
     }

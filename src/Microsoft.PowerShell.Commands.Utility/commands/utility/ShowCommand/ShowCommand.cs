@@ -75,14 +75,14 @@ namespace Microsoft.PowerShell.Commands
         /// Gets or sets the Width.
         /// </summary>
         [Parameter]
-        [ValidateRange(300, Int32.MaxValue)]
+        [ValidateRange(300, int.MaxValue)]
         public double Height { get; set; }
 
         /// <summary>
         /// Gets or sets the Width.
         /// </summary>
         [Parameter]
-        [ValidateRange(300, Int32.MaxValue)]
+        [ValidateRange(300, int.MaxValue)]
         public double Width { get; set; }
 
         /// <summary>
@@ -170,6 +170,13 @@ namespace Microsoft.PowerShell.Commands
         /// </summary>
         protected override void BeginProcessing()
         {
+            if (Utils.IsSessionRestricted(this.Context))
+            {
+                Exception e = new InvalidOperationException(HelpErrors.NotAllowedInRestrictedRemoting);
+                ErrorRecord errorRecord = new ErrorRecord(e, "CommandNotAllowed", ErrorCategory.InvalidOperation, null);
+                this.ThrowTerminatingError(errorRecord);
+            }
+
             _showCommandProxy = new ShowCommandProxy(this);
 
             if (_showCommandProxy.ScreenHeight < this.Height)

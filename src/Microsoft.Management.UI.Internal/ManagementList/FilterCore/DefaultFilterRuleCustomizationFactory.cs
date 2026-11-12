@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 
@@ -37,10 +36,7 @@ namespace Microsoft.Management.UI.Internal
 
             set
             {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
+                ArgumentNullException.ThrowIfNull(value);
 
                 this.propertyValueGetter = value;
             }
@@ -107,15 +103,9 @@ namespace Microsoft.Management.UI.Internal
         /// </param>
         public override void TransferValues(FilterRule oldRule, FilterRule newRule)
         {
-            if (oldRule == null)
-            {
-                throw new ArgumentNullException("oldRule");
-            }
+            ArgumentNullException.ThrowIfNull(oldRule);
 
-            if (newRule == null)
-            {
-                throw new ArgumentNullException("newRule");
-            }
+            ArgumentNullException.ThrowIfNull(newRule);
 
             if (this.TryTransferValuesAsSingleValueComparableValueFilterRule(oldRule, newRule))
             {
@@ -131,10 +121,7 @@ namespace Microsoft.Management.UI.Internal
         /// </param>
         public override void ClearValues(FilterRule rule)
         {
-            if (rule == null)
-            {
-                throw new ArgumentNullException("rule");
-            }
+            ArgumentNullException.ThrowIfNull(rule);
 
             if (this.TryClearValueFromSingleValueComparableValueFilterRule(rule))
             {
@@ -164,10 +151,7 @@ namespace Microsoft.Management.UI.Internal
         /// </returns>
         public override string GetErrorMessageForInvalidValue(string value, Type typeToParseTo)
         {
-            if (typeToParseTo == null)
-            {
-                throw new ArgumentNullException("typeToParseTo");
-            }
+            ArgumentNullException.ThrowIfNull(typeToParseTo);
 
             bool isNumericType = typeToParseTo == typeof(byte)
                 || typeToParseTo == typeof(sbyte)
@@ -197,7 +181,6 @@ namespace Microsoft.Management.UI.Internal
 
         #region Helpers
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         private bool TryGetGenericParameterForComparableValueFilterRule(FilterRule rule, out Type genericParameter)
         {
             genericParameter = null;
@@ -219,16 +202,12 @@ namespace Microsoft.Management.UI.Internal
             return true;
         }
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         private object GetValueFromValidatingValue(FilterRule rule, string propertyName)
         {
             Debug.Assert(rule != null && !string.IsNullOrEmpty(propertyName), "rule and propertyname are not null");
 
             // NOTE: This isn't needed but OACR is complaining
-            if (rule == null)
-            {
-                throw new ArgumentNullException("rule");
-            }
+            ArgumentNullException.ThrowIfNull(rule);
 
             Type ruleType = rule.GetType();
 
@@ -239,16 +218,12 @@ namespace Microsoft.Management.UI.Internal
             return property.GetValue(validatingValue, null);
         }
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         private void SetValueOnValidatingValue(FilterRule rule, string propertyName, object value)
         {
             Debug.Assert(rule != null && !string.IsNullOrEmpty(propertyName), "rule and propertyname are not null");
 
             // NOTE: This isn't needed but OACR is complaining
-            if (rule == null)
-            {
-                throw new ArgumentNullException("rule");
-            }
+            ArgumentNullException.ThrowIfNull(rule);
 
             Type ruleType = rule.GetType();
 

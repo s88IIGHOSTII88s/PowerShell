@@ -43,7 +43,7 @@ namespace Microsoft.PowerShell
         /// </param>
         internal
         void
-        Update(Int64 sourceId, ProgressRecord record)
+        Update(long sourceId, ProgressRecord record)
         {
             Dbg.Assert(record != null, "record should not be null");
 
@@ -119,10 +119,7 @@ namespace Microsoft.PowerShell
                     ProgressNode parentNode = FindNodeById(newNode.SourceId, newNode.ParentActivityId);
                     if (parentNode != null)
                     {
-                        if (parentNode.Children == null)
-                        {
-                            parentNode.Children = new ArrayList();
-                        }
+                        parentNode.Children ??= new ArrayList();
 
                         AddNode(parentNode.Children, newNode);
                         break;
@@ -357,7 +354,7 @@ namespace Microsoft.PowerShell
         /// </summary>
         private
         ProgressNode
-        FindNodeById(Int64 sourceId, int activityId)
+        FindNodeById(long sourceId, int activityId)
         {
             ArrayList listWhereFound = null;
             int indexWhereFound = -1;
@@ -368,7 +365,7 @@ namespace Microsoft.PowerShell
         private sealed class FindByIdNodeVisitor : NodeVisitor
         {
             internal
-            FindByIdNodeVisitor(Int64 sourceIdToFind, int activityIdToFind)
+            FindByIdNodeVisitor(long sourceIdToFind, int activityIdToFind)
             {
                 _sourceIdToFind = sourceIdToFind;
                 _idToFind = activityIdToFind;
@@ -402,7 +399,7 @@ namespace Microsoft.PowerShell
             IndexWhereFound = -1;
 
             private readonly int _idToFind = -1;
-            private readonly Int64 _sourceIdToFind;
+            private readonly long _sourceIdToFind;
         }
 
         /// <summary>
@@ -426,7 +423,7 @@ namespace Microsoft.PowerShell
         /// </returns>
         private
         ProgressNode
-        FindNodeById(Int64 sourceId, int activityId, out ArrayList listWhereFound, out int indexWhereFound)
+        FindNodeById(long sourceId, int activityId, out ArrayList listWhereFound, out int indexWhereFound)
         {
             listWhereFound = null;
             indexWhereFound = -1;
@@ -461,9 +458,7 @@ namespace Microsoft.PowerShell
         /// <returns>
         /// The found node, or null if no suitable node was located.
         /// </returns>
-        private
-        ProgressNode
-        FindOldestNodeOfGivenStyle(ArrayList nodes, int oldestSoFar, ProgressNode.RenderStyle style)
+        private static ProgressNode FindOldestNodeOfGivenStyle(ArrayList nodes, int oldestSoFar, ProgressNode.RenderStyle style)
         {
             if (nodes == null)
             {
@@ -576,7 +571,7 @@ namespace Microsoft.PowerShell
             int invisible = 0;
             if (TallyHeight(rawUI, maxHeight, maxWidth) > maxHeight)
             {
-                // This will smash down nodes until the tree will fit into the alloted number of lines.  If in the
+                // This will smash down nodes until the tree will fit into the allotted number of lines.  If in the
                 // process some nodes were made invisible, we will add a line to the display to say so.
 
                 invisible = CompressToFit(rawUI, maxHeight, maxWidth);
@@ -634,9 +629,7 @@ namespace Microsoft.PowerShell
         /// <param name="rawUI">
         /// The PSHostRawUserInterface used to gauge string widths in the rendering.
         /// </param>
-        private
-        void
-        RenderHelper(ArrayList strings, ArrayList nodes, int indentation, int maxWidth, PSHostRawUserInterface rawUI)
+        private static void RenderHelper(ArrayList strings, ArrayList nodes, int indentation, int maxWidth, PSHostRawUserInterface rawUI)
         {
             Dbg.Assert(strings != null, "strings should not be null");
             Dbg.Assert(nodes != null, "nodes should not be null");
@@ -724,9 +717,7 @@ namespace Microsoft.PowerShell
         /// <param name="nodes"></param>
         /// <param name="style"></param>
         /// <returns></returns>
-        private
-        bool
-        AllNodesHaveGivenStyle(ArrayList nodes, ProgressNode.RenderStyle style)
+        private static bool AllNodesHaveGivenStyle(ArrayList nodes, ProgressNode.RenderStyle style)
         {
             if (nodes == null)
             {
@@ -851,18 +842,6 @@ namespace Microsoft.PowerShell
             }
 
             // If we get all the way to here, then we've compressed all the nodes and we still don't fit.
-
-#if DEBUG || ASSERTIONS_TRACE
-
-            Dbg.Assert(
-                nodesCompressed == CountNodes(),
-                "We should have compressed every node in the tree.");
-            Dbg.Assert(
-                AllNodesHaveGivenStyle(_topLevelNodes, newStyle),
-                "We should have compressed every node in the tree.");
-
-#endif
-
             return false;
         }
 
@@ -887,7 +866,7 @@ namespace Microsoft.PowerShell
         /// <returns>
         /// The number of nodes that were made invisible during the compression.
         ///
-        ///</returns>
+        /// </returns>
         private
         int
         CompressToFit(PSHostRawUserInterface rawUi, int maxHeight, int maxWidth)
@@ -948,8 +927,6 @@ namespace Microsoft.PowerShell
 
                 return nodesCompressed;
             }
-
-            Dbg.Assert(false, "with all nodes invisible, we should never reach this point.");
 
             return 0;
         }

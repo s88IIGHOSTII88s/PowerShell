@@ -63,38 +63,35 @@ namespace Microsoft.PowerShell
             SupportsVirtualTerminal = true;
             _isInteractiveTestToolListening = false;
 
-            if (ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+            // check if TERM env var is set
+            // `dumb` means explicitly don't use VT
+            // `xterm-mono` and `xtermm` means support VT, but emit plaintext
+            switch (Environment.GetEnvironmentVariable("TERM"))
             {
-                // check if TERM env var is set
-                // `dumb` means explicitly don't use VT
-                // `xterm-mono` and `xtermm` means support VT, but emit plaintext
-                switch (Environment.GetEnvironmentVariable("TERM"))
-                {
-                    case "dumb":
-                        SupportsVirtualTerminal = false;
-                        break;
-                    case "xterm-mono":
-                    case "xtermm":
-                        PSStyle.Instance.OutputRendering = OutputRendering.PlainText;
-                        break;
-                    default:
-                        break;
-                }
-
-                // widely supported by CLI tools via https://no-color.org/
-                if (Environment.GetEnvironmentVariable("NO_COLOR") != null)
-                {
+                case "dumb":
+                    SupportsVirtualTerminal = false;
+                    break;
+                case "xterm-mono":
+                case "xtermm":
                     PSStyle.Instance.OutputRendering = OutputRendering.PlainText;
-                }
+                    break;
+                default:
+                    break;
+            }
+
+            // widely supported by CLI tools via https://no-color.org/
+            if (Environment.GetEnvironmentVariable("NO_COLOR") != null)
+            {
+                PSStyle.Instance.OutputRendering = OutputRendering.PlainText;
             }
 
             if (SupportsVirtualTerminal)
             {
-                SupportsVirtualTerminal = TryTurnOnVtMode();
+                SupportsVirtualTerminal = TryTurnOnVirtualTerminal();
             }
         }
 
-        internal bool TryTurnOnVtMode()
+        internal bool TryTurnOnVirtualTerminal()
         {
 #if UNIX
             return true;
@@ -102,16 +99,22 @@ namespace Microsoft.PowerShell
             try
             {
                 // Turn on virtual terminal if possible.
-
                 // This might throw - not sure how exactly (no console), but if it does, we shouldn't fail to start.
-                var handle = ConsoleControl.GetActiveScreenBufferHandle();
-                var m = ConsoleControl.GetMode(handle);
-                if (ConsoleControl.NativeMethods.SetConsoleMode(handle.DangerousGetHandle(), (uint)(m | ConsoleControl.ConsoleModes.VirtualTerminal)))
+                var outputHandle = ConsoleControl.GetActiveScreenBufferHandle();
+                var outputMode = ConsoleControl.GetMode(outputHandle);
+
+                if (outputMode.HasFlag(ConsoleControl.ConsoleModes.VirtualTerminal))
+                {
+                    return true;
+                }
+
+                outputMode |= ConsoleControl.ConsoleModes.VirtualTerminal;
+                if (ConsoleControl.NativeMethods.SetConsoleMode(outputHandle.DangerousGetHandle(), (uint)outputMode))
                 {
                     // We only know if vt100 is supported if the previous call actually set the new flag, older
                     // systems ignore the setting.
-                    m = ConsoleControl.GetMode(handle);
-                    return (m & ConsoleControl.ConsoleModes.VirtualTerminal) != 0;
+                    outputMode = ConsoleControl.GetMode(outputHandle);
+                    return outputMode.HasFlag(ConsoleControl.ConsoleModes.VirtualTerminal);
                 }
             }
             catch
@@ -204,9 +207,8 @@ namespace Microsoft.PowerShell
             HandleThrowOnReadAndPrompt();
 
             // call our internal version such that it does not end input on a tab
-            ReadLineResult unused;
 
-            return ReadLine(false, string.Empty, out unused, true, true);
+            return ReadLine(false, string.Empty, out _, true, true);
         }
 
         /// <summary>
@@ -253,7 +255,7 @@ namespace Microsoft.PowerShell
         /// the advantage is portability through abstraction. Does not support
         /// arrow key movement, but supports backspace.
         /// </summary>
-        ///<param name="isSecureString">
+        /// <param name="isSecureString">
         /// True to specify reading a SecureString; false reading a string
         /// </param>
         /// <param name="printToken">
@@ -330,20 +332,19 @@ namespace Microsoft.PowerShell
 
                 Coordinates originalCursorPos = _rawui.CursorPosition;
 
+                //
+                // read one char at a time so that we don't
+                // end up having a immutable string holding the
+                // secret in memory.
+                //
+                const int CharactersToRead = 1;
+                Span<char> inputBuffer = stackalloc char[CharactersToRead + 1];
+
                 while (true)
                 {
-                    //
-                    // read one char at a time so that we don't
-                    // end up having a immutable string holding the
-                    // secret in memory.
-                    //
 #if UNIX
                     ConsoleKeyInfo keyInfo = Console.ReadKey(true);
 #else
-                    const int CharactersToRead = 1;
-#pragma warning disable CA2014
-                    Span<char> inputBuffer = stackalloc char[CharactersToRead + 1];
-#pragma warning restore CA2014
                     string key = ConsoleControl.ReadConsole(handle, initialContentLength: 0, inputBuffer, charactersToRead: CharactersToRead, endOnTab: false, out _);
 #endif
 
@@ -577,7 +578,7 @@ namespace Microsoft.PowerShell
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void WriteToConsole(char c, bool transcribeResult)
         {
-            ReadOnlySpan<char> value = stackalloc char[1] { c };
+            ReadOnlySpan<char> value = [c];
             WriteToConsole(value, transcribeResult);
         }
 
@@ -708,9 +709,14 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void Write(string value)
         {
-            WriteImpl(value, newLine: false);
+            lock (_instanceLock)
+            {
+                WriteImpl(value, newLine: false);
+            }
         }
 
+        // The WriteImpl() method should always be called within a lock on _instanceLock
+        // to ensure thread safety and prevent issues in multi-threaded scenarios.
         private void WriteImpl(string value, bool newLine)
         {
             if (string.IsNullOrEmpty(value) && !newLine)
@@ -732,7 +738,7 @@ namespace Microsoft.PowerShell
             }
 
             TextWriter writer = Console.IsOutputRedirected ? Console.Out : _parent.ConsoleTextWriter;
-            value = Utils.GetOutputString(value, isHost: true, SupportsVirtualTerminal, Console.IsOutputRedirected);
+            value = GetOutputString(value, SupportsVirtualTerminal);
 
             if (_parent.IsRunningAsync)
             {
@@ -844,7 +850,10 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void WriteLine(string value)
         {
-            this.WriteImpl(value, newLine: true);
+            lock (_instanceLock)
+            {
+                this.WriteImpl(value, newLine: true);
+            }
         }
 
         /// <summary>
@@ -861,7 +870,10 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void WriteLine()
         {
-            this.WriteImpl(Environment.NewLine, newLine: false);
+            lock (_instanceLock)
+            {
+                this.WriteImpl(Environment.NewLine, newLine: false);
+            }
         }
 
         #region Word Wrapping
@@ -1205,10 +1217,6 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void WriteDebugLine(string message)
         {
-            // don't lock here as WriteLine is already protected.
-            bool unused;
-            message = HostUtilities.RemoveGuidFromMessage(message, out unused);
-
             // We should write debug to error stream only if debug is redirected.)
             if (_parent.ErrorFormat == Serialization.DataFormat.XML)
             {
@@ -1216,9 +1224,9 @@ namespace Microsoft.PowerShell
             }
             else
             {
-                if (SupportsVirtualTerminal && ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+                if (SupportsVirtualTerminal)
                 {
-                    WriteLine(Utils.GetFormatStyleString(Utils.FormatStyle.Debug) + StringUtil.Format(ConsoleHostUserInterfaceStrings.DebugFormatString, message) + PSStyle.Instance.Reset);
+                    WriteLine(GetFormatStyleString(FormatStyle.Debug) + StringUtil.Format(ConsoleHostUserInterfaceStrings.DebugFormatString, message) + PSStyle.Instance.Reset);
                 }
                 else
                 {
@@ -1266,10 +1274,6 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void WriteVerboseLine(string message)
         {
-            // don't lock here as WriteLine is already protected.
-            bool unused;
-            message = HostUtilities.RemoveGuidFromMessage(message, out unused);
-
             // NTRAID#Windows OS Bugs-1061752-2004/12/15-sburns should read a skin setting here...)
             if (_parent.ErrorFormat == Serialization.DataFormat.XML)
             {
@@ -1277,9 +1281,9 @@ namespace Microsoft.PowerShell
             }
             else
             {
-                if (SupportsVirtualTerminal && ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+                if (SupportsVirtualTerminal)
                 {
-                    WriteLine(Utils.GetFormatStyleString(Utils.FormatStyle.Verbose) + StringUtil.Format(ConsoleHostUserInterfaceStrings.VerboseFormatString, message) + PSStyle.Instance.Reset);
+                    WriteLine(GetFormatStyleString(FormatStyle.Verbose) + StringUtil.Format(ConsoleHostUserInterfaceStrings.VerboseFormatString, message) + PSStyle.Instance.Reset);
                 }
                 else
                 {
@@ -1310,10 +1314,6 @@ namespace Microsoft.PowerShell
         /// </exception>
         public override void WriteWarningLine(string message)
         {
-            // don't lock here as WriteLine is already protected.
-            bool unused;
-            message = HostUtilities.RemoveGuidFromMessage(message, out unused);
-
             // NTRAID#Windows OS Bugs-1061752-2004/12/15-sburns should read a skin setting here...)
             if (_parent.ErrorFormat == Serialization.DataFormat.XML)
             {
@@ -1321,9 +1321,9 @@ namespace Microsoft.PowerShell
             }
             else
             {
-                if (SupportsVirtualTerminal && ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+                if (SupportsVirtualTerminal)
                 {
-                    WriteLine(Utils.GetFormatStyleString(Utils.FormatStyle.Warning) + StringUtil.Format(ConsoleHostUserInterfaceStrings.WarningFormatString, message) + PSStyle.Instance.Reset);
+                    WriteLine(GetFormatStyleString(FormatStyle.Warning) + StringUtil.Format(ConsoleHostUserInterfaceStrings.WarningFormatString, message) + PSStyle.Instance.Reset);
                 }
                 else
                 {
@@ -1338,24 +1338,10 @@ namespace Microsoft.PowerShell
         /// <summary>
         /// Invoked by CommandBase.WriteProgress to display a progress record.
         /// </summary>
-        public override void WriteProgress(Int64 sourceId, ProgressRecord record)
+        public override void WriteProgress(long sourceId, ProgressRecord record)
         {
             Dbg.Assert(record != null, "WriteProgress called with null ProgressRecord");
 
-            if (Console.IsOutputRedirected)
-            {
-                // Do not write progress bar when the stdout is redirected.
-                return;
-            }
-
-            bool matchPattern;
-            string currentOperation = HostUtilities.RemoveIdentifierInfoFromMessage(record.CurrentOperation, out matchPattern);
-            if (matchPattern)
-            {
-                record = new ProgressRecord(record) { CurrentOperation = currentOperation };
-            }
-
-            // We allow only one thread at a time to update the progress state.)
             if (_parent.ErrorFormat == Serialization.DataFormat.XML)
             {
                 PSObject obj = new PSObject();
@@ -1363,8 +1349,14 @@ namespace Microsoft.PowerShell
                 obj.Properties.Add(new PSNoteProperty("Record", record));
                 _parent.ErrorSerializer.Serialize(obj, "progress");
             }
+            else if (Console.IsOutputRedirected)
+            {
+                // Do not write progress bar when the stdout is redirected.
+                return;
+            }
             else
             {
+                // We allow only one thread at a time to update the progress state.)
                 lock (_instanceLock)
                 {
                     HandleIncomingProgressRecord(sourceId, record);
@@ -1393,7 +1385,7 @@ namespace Microsoft.PowerShell
             {
                 if (writer == _parent.ConsoleTextWriter)
                 {
-                    if (SupportsVirtualTerminal && ExperimentalFeature.IsEnabled("PSAnsiRendering"))
+                    if (SupportsVirtualTerminal)
                     {
                         WriteLine(value);
                     }
@@ -1404,6 +1396,7 @@ namespace Microsoft.PowerShell
                 }
                 else
                 {
+                    value = GetOutputString(value, SupportsVirtualTerminal);
                     Console.Error.WriteLine(value);
                 }
             }
@@ -1493,7 +1486,10 @@ namespace Microsoft.PowerShell
             result = ReadLineResult.endedOnEnter;
 
             // If the test hook is set, read from it.
-            if (s_h != null) return s_h.ReadLine();
+            if (s_h != null)
+            {
+                return s_h.ReadLine();
+            }
 
             string restOfLine = null;
 
@@ -1538,14 +1534,21 @@ namespace Microsoft.PowerShell
                 }
 
                 var c = unchecked((char)inC);
-                if (!NoPrompt) Console.Out.Write(c);
+                if (!NoPrompt)
+                {
+                    Console.Out.Write(c);
+                }
 
                 if (c == '\r')
                 {
                     // Treat as newline, but consume \n if there is one.
                     if (consoleIn.Peek() == '\n')
                     {
-                        if (!NoPrompt) Console.Out.Write('\n');
+                        if (!NoPrompt)
+                        {
+                            Console.Out.Write('\n');
+                        }
+
                         consoleIn.Read();
                     }
 
@@ -1912,22 +1915,24 @@ namespace Microsoft.PowerShell
 #endif
 
         /// <summary>
-        /// Strip nulls from a string...
+        /// Strip nulls from a string.
         /// </summary>
         /// <param name="input">The string to process.</param>
-        /// <returns>The string with any \0 characters removed...</returns>
+        /// <returns>The string with any '\0' characters removed.</returns>
         private static string RemoveNulls(string input)
         {
-            if (input.Contains('\0'))
+            if (!input.Contains('\0'))
             {
                 return input;
             }
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder(input.Length);
             foreach (char c in input)
             {
                 if (c != '\0')
+                {
                     sb.Append(c);
+                }
             }
 
             return sb.ToString();
@@ -2116,20 +2121,20 @@ namespace Microsoft.PowerShell
             for (int i = 0; i < length; i++)
             {
                 var down = new ConsoleControl.INPUT();
-                down.Type = (UInt32)ConsoleControl.InputType.Keyboard;
+                down.Type = (uint)ConsoleControl.InputType.Keyboard;
                 down.Data.Keyboard = new ConsoleControl.KeyboardInput();
-                down.Data.Keyboard.Vk = (UInt16)ConsoleControl.VirtualKeyCode.Left;
+                down.Data.Keyboard.Vk = (ushort)ConsoleControl.VirtualKeyCode.Left;
                 down.Data.Keyboard.Scan = 0;
                 down.Data.Keyboard.Flags = 0;
                 down.Data.Keyboard.Time = 0;
                 down.Data.Keyboard.ExtraInfo = IntPtr.Zero;
 
                 var up = new ConsoleControl.INPUT();
-                up.Type = (UInt32)ConsoleControl.InputType.Keyboard;
+                up.Type = (uint)ConsoleControl.InputType.Keyboard;
                 up.Data.Keyboard = new ConsoleControl.KeyboardInput();
-                up.Data.Keyboard.Vk = (UInt16)ConsoleControl.VirtualKeyCode.Left;
+                up.Data.Keyboard.Vk = (ushort)ConsoleControl.VirtualKeyCode.Left;
                 up.Data.Keyboard.Scan = 0;
-                up.Data.Keyboard.Flags = (UInt32)ConsoleControl.KeyboardFlag.KeyUp;
+                up.Data.Keyboard.Flags = (uint)ConsoleControl.KeyboardFlag.KeyUp;
                 up.Data.Keyboard.Time = 0;
                 up.Data.Keyboard.ExtraInfo = IntPtr.Zero;
 
@@ -2257,7 +2262,7 @@ namespace Microsoft.PowerShell
         private readonly ConsoleHostRawUserInterface _rawui;
         private readonly ConsoleHost _parent;
 
-        [TraceSourceAttribute("ConsoleHostUserInterface", "Console host's subclass of S.M.A.Host.Console")]
+        [TraceSource("ConsoleHostUserInterface", "Console host's subclass of S.M.A.Host.Console")]
         private static readonly PSTraceSource s_tracer = PSTraceSource.GetTracer("ConsoleHostUserInterface", "Console host's subclass of S.M.A.Host.Console");
     }
 }   // namespace

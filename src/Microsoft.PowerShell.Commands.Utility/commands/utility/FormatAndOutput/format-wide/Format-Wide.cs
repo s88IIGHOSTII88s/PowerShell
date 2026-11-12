@@ -10,9 +10,10 @@ using Microsoft.PowerShell.Commands.Internal.Format;
 namespace Microsoft.PowerShell.Commands
 {
     /// <summary>
-    /// Implementation for the format-table command.
+    /// Implementation for the Format-Wide command.
     /// </summary>
     [Cmdlet(VerbsCommon.Format, "Wide", HelpUri = "https://go.microsoft.com/fwlink/?LinkID=2096930")]
+    [OutputType(typeof(FormatStartData), typeof(FormatEntryData), typeof(FormatEndData), typeof(GroupStartData), typeof(GroupEndData))]
     public class FormatWideCommand : OuterFormatShapeCommandBase
     {
         /// <summary>
@@ -41,23 +42,19 @@ namespace Microsoft.PowerShell.Commands
         private object _prop;
 
         /// <summary>
-        /// Optional, non positional parameter.
+        /// Gets or sets the properties to exclude from formatting.
         /// </summary>
-        /// <value></value>
+        [Parameter]
+        public string[] ExcludeProperty { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to autosize the output.
+        /// </summary>
         [Parameter]
         public SwitchParameter AutoSize
         {
-            get
-            {
-                if (_autosize.HasValue)
-                    return _autosize.Value;
-                return false;
-            }
-
-            set
-            {
-                _autosize = value;
-            }
+            get => _autosize.GetValueOrDefault();
+            set => _autosize = value;
         }
 
         private bool? _autosize = null;
@@ -67,20 +64,11 @@ namespace Microsoft.PowerShell.Commands
         /// </summary>
         /// <value></value>
         [Parameter]
-        [ValidateRangeAttribute(1, int.MaxValue)]
+        [ValidateRange(1, int.MaxValue)]
         public int Column
         {
-            get
-            {
-                if (_column.HasValue)
-                    return _column.Value;
-                return -1;
-            }
-
-            set
-            {
-                _column = value;
-            }
+            get => _column.GetValueOrDefault(-1);
+            set => _column = value;
         }
 
         private int? _column = null;
@@ -91,17 +79,11 @@ namespace Microsoft.PowerShell.Commands
         {
             FormattingCommandLineParameters parameters = new();
 
-            if (_prop != null)
-            {
-                ParameterProcessor processor = new(new FormatWideParameterDefinition());
-                TerminatingErrorContext invocationContext = new(this);
-                parameters.mshParameterList = processor.ProcessParameters(new object[] { _prop }, invocationContext);
-            }
-
+            // Check View conflicts first (before any auto-expansion)
             if (!string.IsNullOrEmpty(this.View))
             {
-                // we have a view command line switch
-                if (parameters.mshParameterList.Count != 0)
+                // View cannot be used with Property or ExcludeProperty
+                if (_prop is not null || (ExcludeProperty is not null && ExcludeProperty.Length != 0))
                 {
                     ReportCannotSpecifyViewAndProperty();
                 }
@@ -109,23 +91,40 @@ namespace Microsoft.PowerShell.Commands
                 parameters.viewName = this.View;
             }
 
-            // we cannot specify -column and -autosize, they are mutually exclusive
-            if (_autosize.HasValue && _column.HasValue)
+            if (_prop != null)
             {
-                if (_autosize.Value)
+                ParameterProcessor processor = new(new FormatWideParameterDefinition());
+                TerminatingErrorContext invocationContext = new(this);
+                parameters.mshParameterList = processor.ProcessParameters(new object[] { _prop }, invocationContext);
+            }
+
+            if (ExcludeProperty is not null)
+            {
+                parameters.excludePropertyFilter = new PSPropertyExpressionFilter(ExcludeProperty);
+
+                // ExcludeProperty implies -Property * for better UX
+                if (_prop is null)
                 {
-                    // the user specified -autosize:true AND a column number
-                    string msg = StringUtil.Format(FormatAndOut_format_xxx.CannotSpecifyAutosizeAndColumnsError);
-
-                    ErrorRecord errorRecord = new(
-                        new InvalidDataException(),
-                        "FormatCannotSpecifyAutosizeAndColumns",
-                        ErrorCategory.InvalidArgument,
-                        null);
-
-                    errorRecord.ErrorDetails = new ErrorDetails(msg);
-                    this.ThrowTerminatingError(errorRecord);
+                    ParameterProcessor processor = new(new FormatWideParameterDefinition());
+                    TerminatingErrorContext invocationContext = new(this);
+                    parameters.mshParameterList = processor.ProcessParameters(new object[] { "*" }, invocationContext);
                 }
+            }
+
+            // we cannot specify -column and -autosize, they are mutually exclusive
+            if (AutoSize && _column.HasValue)
+            {
+                // the user specified -autosize:true AND a column number
+                string msg = StringUtil.Format(FormatAndOut_format_xxx.CannotSpecifyAutosizeAndColumnsError);
+
+                ErrorRecord errorRecord = new(
+                    new InvalidDataException(),
+                    "FormatCannotSpecifyAutosizeAndColumns",
+                    ErrorCategory.InvalidArgument,
+                    null);
+
+                errorRecord.ErrorDetails = new ErrorDetails(msg);
+                this.ThrowTerminatingError(errorRecord);
             }
 
             parameters.groupByParameter = this.ProcessGroupByParameter();

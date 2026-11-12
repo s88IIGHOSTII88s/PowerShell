@@ -4,7 +4,6 @@
 using System;
 using System.ComponentModel;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace Microsoft.Management.UI.Internal
@@ -49,10 +48,7 @@ namespace Microsoft.Management.UI.Internal
                 throw new ArgumentException("propertyName is empty", "propertyName");
             }
 
-            if (value == null)
-            {
-                throw new ArgumentNullException("value");
-            }
+            ArgumentNullException.ThrowIfNull(value);
 
             PropertyDescriptor descriptor = this.GetPropertyDescriptor(propertyName, value);
             if (descriptor == null)
@@ -111,7 +107,6 @@ namespace Microsoft.Management.UI.Internal
             return descriptor;
         }
 
-        [SuppressMessage("Performance", "CA1822: Mark members as static", Justification = "Potential breaking change")]
         private bool TryGetPropertyValueInternal(PropertyDescriptor descriptor, object value, out object propertyValue)
         {
             propertyValue = null;

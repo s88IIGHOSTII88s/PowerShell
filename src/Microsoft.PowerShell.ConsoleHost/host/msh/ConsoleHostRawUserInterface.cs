@@ -41,23 +41,16 @@ namespace Microsoft.PowerShell
             //   (we may load resources which can take some time)
             Task.Run(() =>
             {
-                WindowsIdentity identity = WindowsIdentity.GetCurrent();
-                WindowsPrincipal principal = new WindowsPrincipal(identity);
+                var identity = WindowsIdentity.GetCurrent();
+                var principal = new WindowsPrincipal(identity);
                 if (principal.IsInRole(WindowsBuiltInRole.Administrator))
                 {
-                    string prefix = ConsoleHostRawUserInterfaceStrings.WindowTitleElevatedPrefix;
-
-                    // check using Regex if the window already has Administrator: prefix
-                    // (i.e. from the parent console process)
-                    string titlePattern = ConsoleHostRawUserInterfaceStrings.WindowTitleTemplate;
-                    titlePattern = Regex.Escape(titlePattern)
-                        .Replace(@"\{1}", ".*")
-                        .Replace(@"\{0}", Regex.Escape(prefix));
-                    if (!Regex.IsMatch(this.WindowTitle, titlePattern))
+                    // Check if the window already has the "Administrator: " prefix (i.e. from the parent console process).
+                    ReadOnlySpan<char> prefix = ConsoleHostRawUserInterfaceStrings.WindowTitleElevatedPrefix;
+                    ReadOnlySpan<char> windowTitle = WindowTitle;
+                    if (!windowTitle.StartsWith(prefix))
                     {
-                        this.WindowTitle = StringUtil.Format(ConsoleHostRawUserInterfaceStrings.WindowTitleTemplate,
-                            prefix,
-                            this.WindowTitle);
+                        WindowTitle = string.Concat(prefix, windowTitle);
                     }
                 }
             });
@@ -85,9 +78,8 @@ namespace Microsoft.PowerShell
                 GetBufferInfo(out bufferInfo);
 
                 ConsoleColor foreground;
-                ConsoleColor unused;
 
-                ConsoleControl.WORDToColor(bufferInfo.Attributes, out foreground, out unused);
+                ConsoleControl.WORDToColor(bufferInfo.Attributes, out foreground, out _);
                 return foreground;
             }
 
@@ -135,9 +127,8 @@ namespace Microsoft.PowerShell
                 GetBufferInfo(out bufferInfo);
 
                 ConsoleColor background;
-                ConsoleColor unused;
 
-                ConsoleControl.WORDToColor(bufferInfo.Attributes, out unused, out background);
+                ConsoleControl.WORDToColor(bufferInfo.Attributes, out _, out background);
                 return background;
             }
 
@@ -363,8 +354,7 @@ namespace Microsoft.PowerShell
                 }
                 catch (HostException e)
                 {
-                    Win32Exception win32exception = e.InnerException as Win32Exception;
-                    if (win32exception != null &&
+                    if (e.InnerException is Win32Exception win32exception &&
                         win32exception.NativeErrorCode == 0x57)
                     {
                         throw PSTraceSource.NewArgumentOutOfRangeException("value", value,
@@ -457,7 +447,7 @@ namespace Microsoft.PowerShell
                 }
 
                 // if the new size will extend past the edge of screen buffer, then move the window position to try to
-                // accomodate that.
+                // accommodate that.
 
                 ConsoleControl.SMALL_RECT r = bufferInfo.WindowRect;
 
@@ -648,8 +638,7 @@ namespace Microsoft.PowerShell
                     {
                         int actualNumberOfInput = ConsoleControl.ReadConsoleInput(handle, ref inputRecords);
                         Dbg.Assert(actualNumberOfInput == 1,
-                            string.Format(CultureInfo.InvariantCulture, "ReadConsoleInput returns {0} number of input event records",
-                                actualNumberOfInput));
+                            string.Create(CultureInfo.InvariantCulture, $"ReadConsoleInput returns {actualNumberOfInput} number of input event records"));
                         if (actualNumberOfInput == 1)
                         {
                             if (((ConsoleControl.InputRecordEventTypes)inputRecords[0].EventType) ==
@@ -1541,7 +1530,7 @@ namespace Microsoft.PowerShell
 
             public override string ToString()
             {
-                return string.Format(CultureInfo.InvariantCulture, "{0},{1}", X, Y);
+                return string.Create(CultureInfo.InvariantCulture, $"{X},{Y}");
             }
         }
 
@@ -1557,7 +1546,7 @@ namespace Microsoft.PowerShell
 
             public override string ToString()
             {
-                return string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3}", Left, Top, Right, Bottom);
+                return string.Create(CultureInfo.InvariantCulture, $"{Left},{Top},{Right},{Bottom}");
             }
         }
 
@@ -1628,13 +1617,11 @@ namespace Microsoft.PowerShell
                 }
             }
 
-#if UNIX
             // Make sure that the physical cursor position matches where we think it is.
             // This is a problem on *nix, because input that the user types is echoed
             // and that moves the cursor. As a consequence, the cursor needs to be repositioned
             // before we update the screen.
             CursorPosition = origin;
-#endif
 
             // iterate through the buffer to set
             foreach (var charitem in contents)
@@ -1660,13 +1647,27 @@ namespace Microsoft.PowerShell
 
         /// <summary>
         /// This method copies a given character, foreground color, and background
-        /// color to a region of the screen buffer. In this example this
-        /// functionality is not needed so the method throws a
-        /// NotImplementException exception./// </summary>
+        /// color to a region of the screen buffer. Only clearing the whole screen
+        /// with a rectangle of {-1, -1, -1, -1} with ' ' is supported, this is what
+        /// Clear-Host uses when run in a remote session targeting Windows.
+        /// </summary>
         /// <param name="rectangle">Defines the area to be filled.</param>
         /// <param name="fill">Defines the fill character.</param>
         public override void SetBufferContents(Rectangle rectangle, BufferCell fill)
         {
+            if (
+                rectangle.Left == -1 &&
+                rectangle.Right == -1 &&
+                rectangle.Top == -1 &&
+                rectangle.Bottom == -1 &&
+                fill.Character == ' ')
+            {
+                // Clears the local console in response to the whole-buffer clear
+                // requested by Clear-Host on the remote Windows session.
+                Console.Clear();
+                return;
+            }
+
             throw new NotImplementedException("The method or operation is not implemented.");
         }
 

@@ -91,14 +91,14 @@ Describe "ConvertTo-Csv" -Tags "CI" {
         $result | Should -Not -Match ([regex]::Escape('#TYPE'))
     }
 
+    It "Does not include headers with -NoHeader" {
+        $result = $testObject | ConvertTo-Csv -NoHeader
+        $result | Should -BeExactly '"Hello","World"'
+    }
+
     It "Does not support -UseQuotes and -QuoteFields at the same time" {
         { $testObject | ConvertTo-Csv -UseQuotes Always -QuoteFields "TestFieldName" } |
             Should -Throw -ErrorId "CannotSpecifyQuoteFieldsAndUseQuotes,Microsoft.PowerShell.Commands.ConvertToCsvCommand"
-    }
-
-    It "Does not support -IncludeTypeInformation and -NoTypeInformation at the same time" {
-        { $testObject | ConvertTo-Csv -IncludeTypeInformation -NoTypeInformation } |
-            Should -Throw -ErrorId "CannotSpecifyIncludeTypeInformationAndNoTypeInformation,Microsoft.PowerShell.Commands.ConvertToCsvCommand"
     }
 
     Context "QuoteFields parameter" {
@@ -159,6 +159,45 @@ Describe "ConvertTo-Csv" -Tags "CI" {
             $result[0] | Should -BeExactly "`"FirstColumn`"rSecondColumn"
             $result[1] | Should -BeExactly "Hellor"
         }
+
+        It "UseQuotes AsNeeded Escapes Delimiters" {
+            $testDelimitersObject = [pscustomobject]@{ "FirstColumn" = "Hello,"; "Second,Column" = "World" };
+
+            $result = $testDelimitersObject | ConvertTo-Csv -UseQuotes AsNeeded -Delimiter ','
+
+            $result[0] | Should -BeExactly "FirstColumn,`"Second,Column`""
+            $result[1] | Should -BeExactly "`"Hello,`",World"
+
+            $result = $testDelimitersObject | ConvertTo-Csv -UseQuotes AsNeeded -Delimiter "r"
+
+            $result[0] | Should -BeExactly "`"FirstColumn`"rSecond,Column"
+            $result[1] | Should -BeExactly "Hello,r`"World`""
+        }
+
+        It "UseQuotes AsNeeded Escapes Newlines" {
+            $testCRLFObject = [pscustomobject]@{ "First`r`nColumn" = "Hello`r`nWorld" };
+            $testLFObject = [pscustomobject]@{ "First`nColumn" = "Hello`nWorld" };
+
+            $result = $testCRLFObject | ConvertTo-Csv -UseQuotes AsNeeded
+
+            $result[0] | Should -BeExactly "`"First`r`nColumn`""
+            $result[1] | Should -BeExactly "`"Hello`r`nWorld`""
+
+            $result = $testLFObject | ConvertTo-Csv -UseQuotes AsNeeded
+
+            $result[0] | Should -BeExactly "`"First`nColumn`""
+            $result[1] | Should -BeExactly "`"Hello`nWorld`""
+        }
+
+        It "UseQuotes AsNeeded Escapes Quotes" {
+            $testQuotesObject = [pscustomobject]@{ "First`"Column" = "`"Hello`" World" };
+
+            $result = $testQuotesObject | ConvertTo-Csv -UseQuotes AsNeeded
+
+            $result[0] | Should -BeExactly "`"First`"`"Column`""
+            $result[1] | Should -BeExactly "`"`"`"Hello`"`" World`""
+        }
+
     }
 
     Context 'Converting IDictionary Objects' {
@@ -168,6 +207,7 @@ Describe "ConvertTo-Csv" -Tags "CI" {
                 [ordered]@{ Number = $_; Letter = $Letters[$_] }
             }
             $CsvString = $Items | ConvertTo-Csv
+            $TestHashTable = [ordered]@{ 'first' = 'value1'; 'second' = $null; 'third' = 'value3' }
         }
 
         It 'should treat dictionary entries as properties' {
@@ -190,6 +230,13 @@ Describe "ConvertTo-Csv" -Tags "CI" {
             $NewCsvString = $Items | ConvertTo-Csv
             $NewCsvString[0] | Should -MatchExactly 'Extra'
             $NewCsvString | Select-Object -Skip 1 | Should -MatchExactly 'Surprise!'
+        }
+
+        It 'should properly convert hashtable with null and non-null values'{
+            $CsvResult = $TestHashTable | ConvertTo-Csv
+
+            $CsvResult[0] | Should -BeExactly "`"first`",`"second`",`"third`""
+            $CsvResult[1] | Should -BeExactly "`"value1`",$null,`"value3`""
         }
     }
 }

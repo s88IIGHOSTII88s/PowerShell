@@ -4,7 +4,6 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Management.Automation;
 using System.Windows.Documents;
@@ -269,18 +268,16 @@ namespace Microsoft.Management.UI.Internal
         }
 
         /// <summary>
-        /// Called internally to notify when a proiperty changed.
+        /// Called internally to notify when a property changed.
         /// </summary>
         /// <param name="propertyName">Property name.</param>
         private void OnNotifyPropertyChanged(string propertyName)
         {
-            #pragma warning disable IDE1005 // IDE1005: Delegate invocation can be simplified.
             PropertyChangedEventHandler handler = this.PropertyChanged;
             if (handler != null)
             {
                 handler(this, new PropertyChangedEventArgs(propertyName));
             }
-            #pragma warning restore IDE1005s
         }
     }
 }
